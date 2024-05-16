@@ -1,0 +1,12 @@
+[package]
+name = "d3dx12"
+version = "0.0.0"
+edition = "2021"
+description = "Helper structures and helper functions to create and initialize Direct3D structures."
+repository = "https://github.com/rust-game-code/d3dx12"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+keywords = ["directx"]
+categories = ["graphics", "windows-apis"]
+
+[dependencies]
