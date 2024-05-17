@@ -1,6 +1,6 @@
 [package]
 name = "d3dx12"
-version = "0.0.0"
+version = "0.0.1-snapshot"
 edition = "2021"
 description = "Helper structures and helper functions to create and initialize Direct3D structures."
 repository = "https://github.com/rust-game-code/d3dx12"
@@ -9,4 +9,18 @@ license = "MIT OR Apache-2.0"
 keywords = ["directx"]
 categories = ["graphics", "windows-apis"]
 
-[dependencies]
+[features]
+default = []
+d3dx12_state_object_helpers = []
+d3dx12_check_feature_support = []
+d3d12_sdk_version_gte_608 = []
+
+
+[dependencies.windows]
+version = "0.56.0"
+features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Direct3D_Fxc",
+    "Win32_Graphics_Direct3D12",
+    "Win32_Graphics_Dxgi_Common",
+]
