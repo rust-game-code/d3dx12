@@ -10,12 +10,13 @@ keywords = ["directx"]
 categories = ["graphics", "windows-apis"]
 
 [features]
-default = []
+default = ["d3d12_sdk_version_gte_610"]
 d3dx12_state_object_helpers = []
 d3dx12_check_feature_support = []
 d3d12_sdk_version_gte_606 = []
 d3d12_sdk_version_gte_608 = ["d3d12_sdk_version_gte_606"]
 d3d12_sdk_version_gte_609 = ["d3d12_sdk_version_gte_608"]
+d3d12_sdk_version_gte_610 = ["d3d12_sdk_version_gte_610"]
 
 
 [dependencies.windows]

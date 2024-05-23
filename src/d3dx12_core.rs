@@ -241,6 +241,14 @@ const DEFAULT_STENCIL_OP: D3D12_DEPTH_STENCILOP_DESC = D3D12_DEPTH_STENCILOP_DES
     StencilPassOp: D3D12_STENCIL_OP_KEEP,
     StencilFunc: D3D12_COMPARISON_FUNC_ALWAYS,
 };
+const DEFAULT_STENCIL_OP_DESC1: D3D12_DEPTH_STENCILOP_DESC1 = D3D12_DEPTH_STENCILOP_DESC1 {
+    StencilFailOp: D3D12_STENCIL_OP_KEEP,
+    StencilDepthFailOp: D3D12_STENCIL_OP_KEEP,
+    StencilPassOp: D3D12_STENCIL_OP_KEEP,
+    StencilFunc: D3D12_COMPARISON_FUNC_ALWAYS,
+    StencilReadMask: D3D12_DEFAULT_STENCIL_READ_MASK as u8,
+    StencilWriteMask: D3D12_DEFAULT_STENCIL_WRITE_MASK as u8,
+};
 // //------------------------------------------------------------------------------------------------
 pub trait CD3DX12_DEPTH_STENCIL_DESC {
     fn default() -> D3D12_DEPTH_STENCIL_DESC {
@@ -374,134 +382,120 @@ trait CD3DX12_DEPTH_STENCIL_DESC1 {
     }
 }
 
-// //------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------
 // #if defined(D3D12_SDK_VERSION) && (D3D12_SDK_VERSION >= 606)
-// struct CD3DX12_DEPTH_STENCIL_DESC2 : public D3D12_DEPTH_STENCIL_DESC2
-// {
-//     CD3DX12_DEPTH_STENCIL_DESC2() = default;
-//     explicit CD3DX12_DEPTH_STENCIL_DESC2( const D3D12_DEPTH_STENCIL_DESC2& o ) noexcept :
-//         D3D12_DEPTH_STENCIL_DESC2( o )
-//     {}
-//     explicit CD3DX12_DEPTH_STENCIL_DESC2( const D3D12_DEPTH_STENCIL_DESC1& o ) noexcept
-//     {
-//         DepthEnable                  = o.DepthEnable;
-//         DepthWriteMask               = o.DepthWriteMask;
-//         DepthFunc                    = o.DepthFunc;
-//         StencilEnable                = o.StencilEnable;
-//         FrontFace.StencilFailOp      = o.FrontFace.StencilFailOp;
-//         FrontFace.StencilDepthFailOp = o.FrontFace.StencilDepthFailOp;
-//         FrontFace.StencilPassOp      = o.FrontFace.StencilPassOp;
-//         FrontFace.StencilFunc        = o.FrontFace.StencilFunc;
-//         FrontFace.StencilReadMask    = o.StencilReadMask;
-//         FrontFace.StencilWriteMask   = o.StencilWriteMask;
+#[cfg(feature = "d3d12_sdk_version_gte_606")]
+pub trait CD3DX12_DEPTH_STENCIL_DESC2 {
+    fn from_D3D12_DEPTH_STENCIL_DESC1(o: &D3D12_DEPTH_STENCIL_DESC1) -> D3D12_DEPTH_STENCIL_DESC2 {
+        D3D12_DEPTH_STENCIL_DESC2 {
+            DepthEnable: o.DepthEnable,
+            DepthWriteMask: o.DepthWriteMask,
+            DepthFunc: o.DepthFunc,
+            StencilEnable: o.StencilEnable,
+            FrontFace: D3D12_DEPTH_STENCILOP_DESC1 {
+                StencilFailOp: o.FrontFace.StencilFailOp,
+                StencilDepthFailOp: o.FrontFace.StencilDepthFailOp,
+                StencilPassOp: o.FrontFace.StencilPassOp,
+                StencilFunc: o.FrontFace.StencilFunc,
+                StencilReadMask: o.StencilReadMask,
+                StencilWriteMask: o.StencilWriteMask,
+            },
+            BackFace: D3D12_DEPTH_STENCILOP_DESC1 {
+                StencilFailOp: o.BackFace.StencilFailOp,
+                StencilDepthFailOp: o.BackFace.StencilDepthFailOp,
+                StencilPassOp: o.BackFace.StencilPassOp,
+                StencilFunc: o.BackFace.StencilFunc,
+                StencilReadMask: o.StencilReadMask,
+                StencilWriteMask: o.StencilWriteMask,
+            },
+            DepthBoundsTestEnable: o.DepthBoundsTestEnable,
+        }
+    }
+    fn from_D3D12_DEPTH_STENCIL_DESC(o: &D3D12_DEPTH_STENCIL_DESC) -> D3D12_DEPTH_STENCIL_DESC2 {
+        D3D12_DEPTH_STENCIL_DESC2 {
+            DepthEnable: o.DepthEnable,
+            DepthWriteMask: o.DepthWriteMask,
+            DepthFunc: o.DepthFunc,
+            StencilEnable: o.StencilEnable,
+            FrontFace: D3D12_DEPTH_STENCILOP_DESC1 {
+                StencilFailOp: o.FrontFace.StencilFailOp,
+                StencilDepthFailOp: o.FrontFace.StencilDepthFailOp,
+                StencilPassOp: o.FrontFace.StencilPassOp,
+                StencilFunc: o.FrontFace.StencilFunc,
+                StencilReadMask: o.StencilReadMask,
+                StencilWriteMask: o.StencilWriteMask,
+            },
+            BackFace: D3D12_DEPTH_STENCILOP_DESC1 {
+                StencilFailOp: o.BackFace.StencilFailOp,
+                StencilDepthFailOp: o.BackFace.StencilDepthFailOp,
+                StencilPassOp: o.BackFace.StencilPassOp,
+                StencilFunc: o.BackFace.StencilFunc,
+                StencilReadMask: o.StencilReadMask,
+                StencilWriteMask: o.StencilWriteMask,
+            },
+            DepthBoundsTestEnable: FALSE,
+        }
+    }
+    fn default() -> D3D12_DEPTH_STENCIL_DESC2 {
+        D3D12_DEPTH_STENCIL_DESC2 {
+            DepthEnable: TRUE,
+            DepthWriteMask: D3D12_DEPTH_WRITE_MASK_ALL,
+            DepthFunc: D3D12_COMPARISON_FUNC_LESS,
+            StencilEnable: FALSE,
+            FrontFace: DEFAULT_STENCIL_OP_DESC1,
+            BackFace: DEFAULT_STENCIL_OP_DESC1,
+            DepthBoundsTestEnable: FALSE,
+        }
+    }
+    fn new(
+        depth_enable: BOOL,
+        depth_write_mask: D3D12_DEPTH_WRITE_MASK,
+        depth_func: D3D12_COMPARISON_FUNC,
+        stencil_enable: BOOL,
+        front_stencil_fail_op: D3D12_STENCIL_OP,
+        front_stencil_depth_fail_op: D3D12_STENCIL_OP,
+        front_stencil_pass_op: D3D12_STENCIL_OP,
+        front_stencil_func: D3D12_COMPARISON_FUNC,
+        front_stencil_read_mask: u8,
+        front_stencil_write_mask: u8,
+        back_stencil_fail_op: D3D12_STENCIL_OP,
+        back_stencil_depth_fail_op: D3D12_STENCIL_OP,
+        back_stencil_pass_op: D3D12_STENCIL_OP,
+        back_stencil_func: D3D12_COMPARISON_FUNC,
+        back_stencil_read_mask: u8,
+        back_stencil_write_mask: u8,
+        depth_bounds_test_enable: BOOL,
+    ) -> D3D12_DEPTH_STENCIL_DESC2 {
+        D3D12_DEPTH_STENCIL_DESC2 {
+            DepthEnable: depth_enable,
+            DepthWriteMask: depth_write_mask,
+            DepthFunc: depth_func,
+            StencilEnable: stencil_enable,
+            FrontFace: D3D12_DEPTH_STENCILOP_DESC1 {
+                StencilFailOp: front_stencil_fail_op,
+                StencilDepthFailOp: front_stencil_depth_fail_op,
+                StencilPassOp: front_stencil_pass_op,
+                StencilFunc: front_stencil_func,
+                StencilReadMask: front_stencil_read_mask,
+                StencilWriteMask: front_stencil_write_mask,
+            },
+            BackFace: D3D12_DEPTH_STENCILOP_DESC1 {
+                StencilFailOp: back_stencil_fail_op,
+                StencilDepthFailOp: back_stencil_depth_fail_op,
+                StencilPassOp: back_stencil_pass_op,
+                StencilFunc: back_stencil_func,
+                StencilReadMask: back_stencil_read_mask,
+                StencilWriteMask: back_stencil_write_mask,
+            },
+            DepthBoundsTestEnable: depth_bounds_test_enable,
+        }
+    }
+}
 
-//         BackFace.StencilFailOp       = o.BackFace.StencilFailOp;
-//         BackFace.StencilDepthFailOp  = o.BackFace.StencilDepthFailOp;
-//         BackFace.StencilPassOp       = o.BackFace.StencilPassOp;
-//         BackFace.StencilFunc         = o.BackFace.StencilFunc;
-//         BackFace.StencilReadMask     = o.StencilReadMask;
-//         BackFace.StencilWriteMask    = o.StencilWriteMask;
-//         DepthBoundsTestEnable        = o.DepthBoundsTestEnable;
-//     }
-//     explicit CD3DX12_DEPTH_STENCIL_DESC2( const D3D12_DEPTH_STENCIL_DESC& o ) noexcept
-//     {
-//         DepthEnable                  = o.DepthEnable;
-//         DepthWriteMask               = o.DepthWriteMask;
-//         DepthFunc                    = o.DepthFunc;
-//         StencilEnable                = o.StencilEnable;
+#[cfg(feature = "d3d12_sdk_version_gte_606")]
+impl CD3DX12_DEPTH_STENCIL_DESC2 for D3D12_DEPTH_STENCIL_DESC2 {}
 
-//         FrontFace.StencilFailOp      = o.FrontFace.StencilFailOp;
-//         FrontFace.StencilDepthFailOp = o.FrontFace.StencilDepthFailOp;
-//         FrontFace.StencilPassOp      = o.FrontFace.StencilPassOp;
-//         FrontFace.StencilFunc        = o.FrontFace.StencilFunc;
-//         FrontFace.StencilReadMask    = o.StencilReadMask;
-//         FrontFace.StencilWriteMask   = o.StencilWriteMask;
-
-//         BackFace.StencilFailOp       = o.BackFace.StencilFailOp;
-//         BackFace.StencilDepthFailOp  = o.BackFace.StencilDepthFailOp;
-//         BackFace.StencilPassOp       = o.BackFace.StencilPassOp;
-//         BackFace.StencilFunc         = o.BackFace.StencilFunc;
-//         BackFace.StencilReadMask     = o.StencilReadMask;
-//         BackFace.StencilWriteMask    = o.StencilWriteMask;
-
-//         DepthBoundsTestEnable        = FALSE;
-//     }
-//     explicit CD3DX12_DEPTH_STENCIL_DESC2( CD3DX12_DEFAULT ) noexcept
-//     {
-//         DepthEnable = TRUE;
-//         DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-//         DepthFunc = D3D12_COMPARISON_FUNC_LESS;
-//         StencilEnable = FALSE;
-//         const D3D12_DEPTH_STENCILOP_DESC1 defaultStencilOp =
-//         { D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_STENCIL_OP_KEEP, D3D12_COMPARISON_FUNC_ALWAYS, D3D12_DEFAULT_STENCIL_READ_MASK, D3D12_DEFAULT_STENCIL_WRITE_MASK };
-//         FrontFace = defaultStencilOp;
-//         BackFace = defaultStencilOp;
-//         DepthBoundsTestEnable = FALSE;
-//     }
-//     explicit CD3DX12_DEPTH_STENCIL_DESC2(
-//         BOOL depthEnable,
-//         D3D12_DEPTH_WRITE_MASK depthWriteMask,
-//         D3D12_COMPARISON_FUNC depthFunc,
-//         BOOL stencilEnable,
-//         D3D12_STENCIL_OP frontStencilFailOp,
-//         D3D12_STENCIL_OP frontStencilDepthFailOp,
-//         D3D12_STENCIL_OP frontStencilPassOp,
-//         D3D12_COMPARISON_FUNC frontStencilFunc,
-//         UINT8 frontStencilReadMask,
-//         UINT8 frontStencilWriteMask,
-//         D3D12_STENCIL_OP backStencilFailOp,
-//         D3D12_STENCIL_OP backStencilDepthFailOp,
-//         D3D12_STENCIL_OP backStencilPassOp,
-//         D3D12_COMPARISON_FUNC backStencilFunc,
-//         UINT8 backStencilReadMask,
-//         UINT8 backStencilWriteMask,
-//         BOOL depthBoundsTestEnable ) noexcept
-//     {
-//         DepthEnable = depthEnable;
-//         DepthWriteMask = depthWriteMask;
-//         DepthFunc = depthFunc;
-//         StencilEnable = stencilEnable;
-
-//         FrontFace.StencilFailOp = frontStencilFailOp;
-//         FrontFace.StencilDepthFailOp = frontStencilDepthFailOp;
-//         FrontFace.StencilPassOp = frontStencilPassOp;
-//         FrontFace.StencilFunc = frontStencilFunc;
-//         FrontFace.StencilReadMask = frontStencilReadMask;
-//         FrontFace.StencilWriteMask = frontStencilWriteMask;
-
-//         BackFace.StencilFailOp = backStencilFailOp;
-//         BackFace.StencilDepthFailOp = backStencilDepthFailOp;
-//         BackFace.StencilPassOp = backStencilPassOp;
-//         BackFace.StencilFunc = backStencilFunc;
-//         BackFace.StencilReadMask = backStencilReadMask;
-//         BackFace.StencilWriteMask = backStencilWriteMask;
-
-//         DepthBoundsTestEnable = depthBoundsTestEnable;
-//     }
-
-//     operator D3D12_DEPTH_STENCIL_DESC() const noexcept
-//     {
-//         D3D12_DEPTH_STENCIL_DESC D;
-//         D.DepthEnable = DepthEnable;
-//         D.DepthWriteMask = DepthWriteMask;
-//         D.DepthFunc = DepthFunc;
-//         D.StencilEnable = StencilEnable;
-//         D.StencilReadMask = FrontFace.StencilReadMask;
-//         D.StencilWriteMask = FrontFace.StencilWriteMask;
-//         D.FrontFace.StencilFailOp = FrontFace.StencilFailOp;
-//         D.FrontFace.StencilDepthFailOp = FrontFace.StencilDepthFailOp;
-//         D.FrontFace.StencilPassOp = FrontFace.StencilPassOp;
-//         D.FrontFace.StencilFunc = FrontFace.StencilFunc;
-//         D.BackFace.StencilFailOp = BackFace.StencilFailOp;
-//         D.BackFace.StencilDepthFailOp = BackFace.StencilDepthFailOp;
-//         D.BackFace.StencilPassOp = BackFace.StencilPassOp;
-//         D.BackFace.StencilFunc = BackFace.StencilFunc;
-//         return D;
-//     }
-// };
-// #endif // D3D12_SDK_VERSION >= 606
-
-// //------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------
 pub trait CD3DX12_BLEND_DESC {
     fn default() -> D3D12_BLEND_DESC {
         D3D12_BLEND_DESC {
@@ -570,89 +564,87 @@ pub trait CD3DX12_RASTERIZER_DESC {
     }
 }
 
-// //------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------
 // #if defined(D3D12_SDK_VERSION) && (D3D12_SDK_VERSION >= 608)
-// struct CD3DX12_RASTERIZER_DESC1 : public D3D12_RASTERIZER_DESC1
-// {
-//     CD3DX12_RASTERIZER_DESC1() = default;
-//     explicit CD3DX12_RASTERIZER_DESC1(const D3D12_RASTERIZER_DESC1& o) noexcept :
-//         D3D12_RASTERIZER_DESC1(o)
-
-//     {
-//     }
-//     explicit CD3DX12_RASTERIZER_DESC1(const D3D12_RASTERIZER_DESC& o) noexcept
-//     {
-//         FillMode = o.FillMode;
-//         CullMode = o.CullMode;
-//         FrontCounterClockwise = o.FrontCounterClockwise;
-//         DepthBias = static_cast<FLOAT>(o.DepthBias);
-//         DepthBiasClamp = o.DepthBiasClamp;
-//         SlopeScaledDepthBias = o.SlopeScaledDepthBias;
-//         DepthClipEnable = o.DepthClipEnable;
-//         MultisampleEnable = o.MultisampleEnable;
-//         AntialiasedLineEnable = o.AntialiasedLineEnable;
-//         ForcedSampleCount = o.ForcedSampleCount;
-//         ConservativeRaster = o.ConservativeRaster;
-//     }
-//     explicit CD3DX12_RASTERIZER_DESC1(CD3DX12_DEFAULT) noexcept
-//     {
-//         FillMode = D3D12_FILL_MODE_SOLID;
-//         CullMode = D3D12_CULL_MODE_BACK;
-//         FrontCounterClockwise = FALSE;
-//         DepthBias = D3D12_DEFAULT_DEPTH_BIAS;
-//         DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
-//         SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
-//         DepthClipEnable = TRUE;
-//         MultisampleEnable = FALSE;
-//         AntialiasedLineEnable = FALSE;
-//         ForcedSampleCount = 0;
-//         ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
-//     }
-//     explicit CD3DX12_RASTERIZER_DESC1(
-//         D3D12_FILL_MODE fillMode,
-//         D3D12_CULL_MODE cullMode,
-//         BOOL frontCounterClockwise,
-//         FLOAT depthBias,
-//         FLOAT depthBiasClamp,
-//         FLOAT slopeScaledDepthBias,
-//         BOOL depthClipEnable,
-//         BOOL multisampleEnable,
-//         BOOL antialiasedLineEnable,
-//         UINT forcedSampleCount,
-//         D3D12_CONSERVATIVE_RASTERIZATION_MODE conservativeRaster) noexcept
-//     {
-//         FillMode = fillMode;
-//         CullMode = cullMode;
-//         FrontCounterClockwise = frontCounterClockwise;
-//         DepthBias = depthBias;
-//         DepthBiasClamp = depthBiasClamp;
-//         SlopeScaledDepthBias = slopeScaledDepthBias;
-//         DepthClipEnable = depthClipEnable;
-//         MultisampleEnable = multisampleEnable;
-//         AntialiasedLineEnable = antialiasedLineEnable;
-//         ForcedSampleCount = forcedSampleCount;
-//         ConservativeRaster = conservativeRaster;
-//     }
-
-//     operator D3D12_RASTERIZER_DESC() const noexcept
-//     {
-//         D3D12_RASTERIZER_DESC o;
-
-//         o.FillMode = FillMode;
-//         o.CullMode = CullMode;
-//         o.FrontCounterClockwise = FrontCounterClockwise;
-//         o.DepthBias = static_cast<INT>(DepthBias);
-//         o.DepthBiasClamp = DepthBiasClamp;
-//         o.SlopeScaledDepthBias = SlopeScaledDepthBias;
-//         o.DepthClipEnable = DepthClipEnable;
-//         o.MultisampleEnable = MultisampleEnable;
-//         o.AntialiasedLineEnable = AntialiasedLineEnable;
-//         o.ForcedSampleCount = ForcedSampleCount;
-//         o.ConservativeRaster = ConservativeRaster;
-
-//         return o;
-//     }
-// };
+#[cfg(feature = "d3d12_sdk_version_gte_608")]
+pub trait CD3DX12_RASTERIZER_DESC1 {
+    fn from_D3D12_RASTERIZER_DESC(o: &D3D12_RASTERIZER_DESC) -> D3D12_RASTERIZER_DESC1 {
+        D3D12_RASTERIZER_DESC1 {
+            FillMode: o.FillMode,
+            CullMode: o.CullMode,
+            FrontCounterClockwise: o.FrontCounterClockwise,
+            DepthBias: o.DepthBias as f32,
+            DepthBiasClamp: o.DepthBiasClamp,
+            SlopeScaledDepthBias: o.SlopeScaledDepthBias,
+            DepthClipEnable: o.DepthClipEnable,
+            MultisampleEnable: o.MultisampleEnable,
+            AntialiasedLineEnable: o.AntialiasedLineEnable,
+            ForcedSampleCount: o.ForcedSampleCount,
+            ConservativeRaster: o.ConservativeRaster,
+        }
+    }
+    fn default() -> D3D12_RASTERIZER_DESC1 {
+        D3D12_RASTERIZER_DESC1 {
+            FillMode: D3D12_FILL_MODE_SOLID,
+            CullMode: D3D12_CULL_MODE_BACK,
+            FrontCounterClockwise: FALSE,
+            DepthBias: D3D12_DEFAULT_DEPTH_BIAS,
+            DepthBiasClamp: D3D12_DEFAULT_DEPTH_BIAS_CLAMP,
+            SlopeScaledDepthBias: D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS,
+            DepthClipEnable: TRUE,
+            MultisampleEnable: FALSE,
+            AntialiasedLineEnable: FALSE,
+            ForcedSampleCount: 0,
+            ConservativeRaster: D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF,
+        }
+    }
+    pub fn new(
+        fill_mode: D3D12_FILL_MODE,
+        cull_mode: D3D12_CULL_MODE,
+        front_counter_clockwise: bool,
+        depth_bias: f32,
+        depth_bias_clamp: f32,
+        slope_scaled_depth_bias: f32,
+        depth_clip_enable: bool,
+        multisample_enable: bool,
+        antialiased_line_enable: bool,
+        forced_sample_count: u32,
+        conservative_raster: D3D12_CONSERVATIVE_RASTERIZATION_MODE,
+    ) -> D3D12_RASTERIZER_DESC1 {
+        D3D12_RASTERIZER_DESC1 {
+            FillMode: fill_mode,
+            CullMode: cull_mode,
+            FrontCounterClockwise: front_counter_clockwise,
+            DepthBias: depth_bias,
+            DepthBiasClamp: depth_bias_clamp,
+            SlopeScaledDepthBias: slope_scaled_depth_bias,
+            DepthClipEnable: depth_clip_enable,
+            MultisampleEnable: multisample_enable,
+            AntialiasedLineEnable: antialiased_line_enable,
+            ForcedSampleCount: forced_sample_count,
+            ConservativeRaster: conservative_raster,
+        }
+    }
+    fn to_D3D12_RASTERIZER_DESC(&self) -> D3D12_RASTERIZER_DESC;
+}
+#[cfg(feature = "d3d12_sdk_version_gte_608")]
+impl CD3DX12_RASTERIZER_DESC1 for D3D12_RASTERIZER_DESC1 {
+    fn to_D3D12_RASTERIZER_DESC(&self) -> D3D12_RASTERIZER_DESC {
+        D3D12_RASTERIZER_DESC {
+            FillMode: self.FillMode,
+            CullMode: self.CullMode,
+            FrontCounterClockwise: self.FrontCounterClockwise,
+            DepthBias: self.DepthBias as i32,
+            DepthBiasClamp: self.DepthBiasClamp,
+            SlopeScaledDepthBias: self.SlopeScaledDepthBias,
+            DepthClipEnable: self.DepthClipEnable,
+            MultisampleEnable: self.MultisampleEnable,
+            AntialiasedLineEnable: self.AntialiasedLineEnable,
+            ForcedSampleCount: self.ForcedSampleCount,
+            ConservativeRaster: self.ConservativeRaster,
+        }
+    }
+}
 // #endif // D3D12_SDK_VERSION >= 608
 
 // //------------------------------------------------------------------------------------------------
