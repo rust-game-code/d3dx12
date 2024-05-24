@@ -1208,25 +1208,38 @@ pub trait CD3DX12_TEXTURE_COPY_LOCATION {
 }
 impl CD3DX12_TEXTURE_COPY_LOCATION for D3D12_TEXTURE_COPY_LOCATION {}
 
-// //------------------------------------------------------------------------------------------------
-// constexpr UINT D3D12CalcSubresource( UINT MipSlice, UINT ArraySlice, UINT PlaneSlice, UINT MipLevels, UINT ArraySize ) noexcept
-// {
-//     return MipSlice + ArraySlice * MipLevels + PlaneSlice * MipLevels * ArraySize;
-// }
+//------------------------------------------------------------------------------------------------
+pub const fn D3D12CalcSubresource(
+    mip_slice: u32,
+    array_slice: u32,
+    plane_slice: u32,
+    mip_levels: u32,
+    array_size: u32,
+) -> u32 {
+    mip_slice + array_slice * mip_levels + plane_slice * mip_levels * array_size
+}
 
-// //------------------------------------------------------------------------------------------------
-// inline UINT8 D3D12GetFormatPlaneCount(
-//     _In_ ID3D12Device* pDevice,
-//     DXGI_FORMAT Format
-//     ) noexcept
-// {
-//     D3D12_FEATURE_DATA_FORMAT_INFO formatInfo = { Format, 0 };
-//     if (FAILED(pDevice->CheckFeatureSupport(D3D12_FEATURE_FORMAT_INFO, &formatInfo, sizeof(formatInfo))))
-//     {
-//         return 0;
-//     }
-//     return formatInfo.PlaneCount;
-// }
+//------------------------------------------------------------------------------------------------
+#[inline]
+pub fn D3D12GetFormatPlaneCount(device: &ID3D12Device, format: DXGI_FORMAT) -> u8 {
+    let mut format_info = D3D12_FEATURE_DATA_FORMAT_INFO {
+        Format: format,
+        PlaneCount: 0,
+    };
+    if unsafe {
+        device
+            .CheckFeatureSupport(
+                D3D12_FEATURE_FORMAT_INFO,
+                &mut format_info as *mut _ as *mut _,
+                std::mem::size_of_val(&format_info) as u32,
+            )
+            .is_err()
+    } {
+        0
+    } else {
+        format_info.PlaneCount
+    }
+}
 
 //------------------------------------------------------------------------------------------------
 #[allow(non_camel_case_types)]
@@ -1265,9 +1278,13 @@ pub trait CD3DX12_RESOURCE_DESC {
     }
 
     #[inline]
-    fn buffer(width: u64) -> D3D12_RESOURCE_DESC {
-        let flags = D3D12_RESOURCE_FLAG_NONE;
-        let alignment = 0;
+    fn buffer(
+        width: u64,
+        flags: Option<D3D12_RESOURCE_FLAGS>,
+        alignment: Option<u64>,
+    ) -> D3D12_RESOURCE_DESC {
+        let flags = flags.unwrap_or(D3D12_RESOURCE_FLAG_NONE);
+        let alignment = alignment.unwrap_or(0);
         Self::new(
             D3D12_RESOURCE_DIMENSION_BUFFER,
             alignment,
@@ -1282,6 +1299,56 @@ pub trait CD3DX12_RESOURCE_DESC {
             flags,
         )
     }
+
+    fn buffer_with_resource_allocation_info(
+        res_alloc_info: D3D12_RESOURCE_ALLOCATION_INFO,
+        flags: Option<D3D12_RESOURCE_FLAGS>,
+    ) -> D3D12_RESOURCE_DESC {
+        let flags = flags.unwrap_or(D3D12_RESOURCE_FLAG_NONE);
+        Self::new(
+            D3D12_RESOURCE_DIMENSION_BUFFER,
+            res_alloc_info.Alignment,
+            res_alloc_info.SizeInBytes,
+            1,
+            1,
+            1,
+            DXGI_FORMAT_UNKNOWN,
+            1,
+            0,
+            D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+            flags,
+        )
+    }
+
+    fn tex_1d(
+        format: DXGI_FORMAT,
+        width: u64,
+        array_size: Option<u16>,
+        mip_levels: Option<u16>,
+        flags: Option<D3D12_RESOURCE_FLAGS>,
+        layout: Option<D3D12_TEXTURE_LAYOUT>,
+        alignment: Option<u64>,
+    ) -> D3D12_RESOURCE_DESC {
+        let array_size = array_size.unwrap_or(1);
+        let mip_levels = mip_levels.unwrap_or(0);
+        let flags = flags.unwrap_or(D3D12_RESOURCE_FLAG_NONE);
+        let layout = layout.unwrap_or(D3D12_TEXTURE_LAYOUT_UNKNOWN);
+        let alignment = alignment.unwrap_or(0);
+        Self::new(
+            D3D12_RESOURCE_DIMENSION_TEXTURE1D,
+            alignment,
+            width,
+            1,
+            array_size,
+            mip_levels,
+            format,
+            1,
+            0,
+            layout,
+            flags,
+        )
+    }
+
     #[allow(clippy::too_many_arguments)]
     #[inline]
     fn tex_2d(
@@ -1317,119 +1384,70 @@ pub trait CD3DX12_RESOURCE_DESC {
             flags,
         )
     }
-    // CD3DX12_RESOURCE_DESC() = default;
-    // explicit CD3DX12_RESOURCE_DESC( const D3D12_RESOURCE_DESC& o ) noexcept :
-    //     D3D12_RESOURCE_DESC( o )
-    // {}
-    // CD3DX12_RESOURCE_DESC(
-    //     D3D12_RESOURCE_DIMENSION dimension,
-    //     UINT64 alignment,
-    //     UINT64 width,
-    //     UINT height,
-    //     UINT16 depthOrArraySize,
-    //     UINT16 mipLevels,
-    //     DXGI_FORMAT format,
-    //     UINT sampleCount,
-    //     UINT sampleQuality,
-    //     D3D12_TEXTURE_LAYOUT layout,
-    //     D3D12_RESOURCE_FLAGS flags ) noexcept
-    // {
-    //     Dimension = dimension;
-    //     Alignment = alignment;
-    //     Width = width;
-    //     Height = height;
-    //     DepthOrArraySize = depthOrArraySize;
-    //     MipLevels = mipLevels;
-    //     Format = format;
-    //     SampleDesc.Count = sampleCount;
-    //     SampleDesc.Quality = sampleQuality;
-    //     Layout = layout;
-    //     Flags = flags;
-    // }
-    // static inline CD3DX12_RESOURCE_DESC Buffer(
-    //     const D3D12_RESOURCE_ALLOCATION_INFO& resAllocInfo,
-    //     D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE ) noexcept
-    // {
-    //     return CD3DX12_RESOURCE_DESC( D3D12_RESOURCE_DIMENSION_BUFFER, resAllocInfo.Alignment, resAllocInfo.SizeInBytes,
-    //         1, 1, 1, DXGI_FORMAT_UNKNOWN, 1, 0, D3D12_TEXTURE_LAYOUT_ROW_MAJOR, flags );
-    // }
-    // static inline CD3DX12_RESOURCE_DESC Buffer(
-    //     UINT64 width,
-    //     D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE,
-    //     UINT64 alignment = 0 ) noexcept
-    // {
-    //     return CD3DX12_RESOURCE_DESC( D3D12_RESOURCE_DIMENSION_BUFFER, alignment, width, 1, 1, 1,
-    //         DXGI_FORMAT_UNKNOWN, 1, 0, D3D12_TEXTURE_LAYOUT_ROW_MAJOR, flags );
-    // }
-    // static inline CD3DX12_RESOURCE_DESC Tex1D(
-    //     DXGI_FORMAT format,
-    //     UINT64 width,
-    //     UINT16 arraySize = 1,
-    //     UINT16 mipLevels = 0,
-    //     D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE,
-    //     D3D12_TEXTURE_LAYOUT layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
-    //     UINT64 alignment = 0 ) noexcept
-    // {
-    //     return CD3DX12_RESOURCE_DESC( D3D12_RESOURCE_DIMENSION_TEXTURE1D, alignment, width, 1, arraySize,
-    //         mipLevels, format, 1, 0, layout, flags );
-    // }
-    // static inline CD3DX12_RESOURCE_DESC Tex2D(
-    //     DXGI_FORMAT format,
-    //     UINT64 width,
-    //     UINT height,
-    //     UINT16 arraySize = 1,
-    //     UINT16 mipLevels = 0,
-    //     UINT sampleCount = 1,
-    //     UINT sampleQuality = 0,
-    //     D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE,
-    //     D3D12_TEXTURE_LAYOUT layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
-    //     UINT64 alignment = 0 ) noexcept
-    // {
-    //     return CD3DX12_RESOURCE_DESC( D3D12_RESOURCE_DIMENSION_TEXTURE2D, alignment, width, height, arraySize,
-    //         mipLevels, format, sampleCount, sampleQuality, layout, flags );
-    // }
-    // static inline CD3DX12_RESOURCE_DESC Tex3D(
-    //     DXGI_FORMAT format,
-    //     UINT64 width,
-    //     UINT height,
-    //     UINT16 depth,
-    //     UINT16 mipLevels = 0,
-    //     D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE,
-    //     D3D12_TEXTURE_LAYOUT layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
-    //     UINT64 alignment = 0 ) noexcept
-    // {
-    //     return CD3DX12_RESOURCE_DESC( D3D12_RESOURCE_DIMENSION_TEXTURE3D, alignment, width, height, depth,
-    //         mipLevels, format, 1, 0, layout, flags );
-    // }
-    // inline UINT16 Depth() const noexcept
-    // { return (Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D ? DepthOrArraySize : 1u); }
-    // inline UINT16 ArraySize() const noexcept
-    // { return (Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE3D ? DepthOrArraySize : 1u); }
-    // inline UINT8 PlaneCount(_In_ ID3D12Device* pDevice) const noexcept
-    // { return D3D12GetFormatPlaneCount(pDevice, Format); }
-    // inline UINT Subresources(_In_ ID3D12Device* pDevice) const noexcept
-    // { return static_cast<UINT>(MipLevels) * ArraySize() * PlaneCount(pDevice); }
-    // inline UINT CalcSubresource(UINT MipSlice, UINT ArraySlice, UINT PlaneSlice) noexcept
-    // { return D3D12CalcSubresource(MipSlice, ArraySlice, PlaneSlice, MipLevels, ArraySize()); }
+    fn tex_3h(
+        format: DXGI_FORMAT,
+        width: u64,
+        height: u32,
+        depth: u16,
+        mip_levels: Option<u16>,
+        flags: Option<D3D12_RESOURCE_FLAGS>,
+        layout: Option<D3D12_TEXTURE_LAYOUT>,
+        alignment: Option<u64>,
+    ) -> D3D12_RESOURCE_DESC {
+        let mip_levels = mip_levels.unwrap_or(0);
+        let flags = flags.unwrap_or(D3D12_RESOURCE_FLAG_NONE);
+        let layout = layout.unwrap_or(D3D12_TEXTURE_LAYOUT_UNKNOWN);
+        let alignment = alignment.unwrap_or(0);
+        Self::new(
+            D3D12_RESOURCE_DIMENSION_TEXTURE3D,
+            alignment,
+            width,
+            height,
+            depth,
+            mip_levels,
+            format,
+            1,
+            0,
+            layout,
+            flags,
+        )
+    }
+    #[inline]
+    fn depth(&self) -> u16 {
+        if self.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D {
+            self.DepthOrArraySize
+        } else {
+            1
+        }
+    }
+    #[inline]
+    fn array_size(&self) -> u16 {
+        if self.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE3D {
+            self.DepthOrArraySize
+        } else {
+            1
+        }
+    }
+    #[inline]
+    fn plane_count(&self, device: &ID3D12Device) -> u8 {
+        D3D12GetFormatPlaneCount(device, self.Format)
+    }
+    #[inline]
+    fn subresources(&self, device: &ID3D12Device) -> u32 {
+        self.MipLevels as u32 * self.array_size() as u32 * self.plane_count(device) as u32
+    }
+    #[inline]
+    fn calc_subresource(&self, mip_slice: u32, array_slice: u32, plane_slice: u32) -> u32 {
+        D3D12CalcSubresource(
+            mip_slice,
+            array_slice,
+            plane_slice,
+            self.MipLevels,
+            self.array_size(),
+        )
+    }
 }
 impl CD3DX12_RESOURCE_DESC for D3D12_RESOURCE_DESC {}
-
-// inline bool operator==( const D3D12_RESOURCE_DESC& l, const D3D12_RESOURCE_DESC& r ) noexcept
-// {
-//     return l.Dimension == r.Dimension &&
-//         l.Alignment == r.Alignment &&
-//         l.Width == r.Width &&
-//         l.Height == r.Height &&
-//         l.DepthOrArraySize == r.DepthOrArraySize &&
-//         l.MipLevels == r.MipLevels &&
-//         l.Format == r.Format &&
-//         l.SampleDesc.Count == r.SampleDesc.Count &&
-//         l.SampleDesc.Quality == r.SampleDesc.Quality &&
-//         l.Layout == r.Layout &&
-//         l.Flags == r.Flags;
-// }
-// inline bool operator!=( const D3D12_RESOURCE_DESC& l, const D3D12_RESOURCE_DESC& r ) noexcept
-// { return !( l == r ); }
 
 // //------------------------------------------------------------------------------------------------
 // struct CD3DX12_RESOURCE_DESC1 : public D3D12_RESOURCE_DESC1
