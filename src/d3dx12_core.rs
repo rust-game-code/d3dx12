@@ -12,7 +12,11 @@ use windows::Win32::{
     Graphics::{
         Direct3D::ID3DBlob,
         Direct3D12::*,
-        Dxgi::Common::{DXGI_FORMAT, DXGI_FORMAT_UNKNOWN, DXGI_SAMPLE_DESC},
+        Dxgi::Common::{
+            DXGI_FORMAT, DXGI_FORMAT_D16_UNORM, DXGI_FORMAT_D24_UNORM_S8_UINT,
+            DXGI_FORMAT_D32_FLOAT, DXGI_FORMAT_D32_FLOAT_S8X24_UINT, DXGI_FORMAT_UNKNOWN,
+            DXGI_SAMPLE_DESC,
+        },
     },
 };
 
@@ -645,130 +649,117 @@ impl CD3DX12_RASTERIZER_DESC1 for D3D12_RASTERIZER_DESC1 {
         }
     }
 }
-// #endif // D3D12_SDK_VERSION >= 608
 
-// //------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------
 // #if defined(D3D12_SDK_VERSION) && (D3D12_SDK_VERSION >= 610)
-// struct CD3DX12_RASTERIZER_DESC2 : public D3D12_RASTERIZER_DESC2
-// {
-//     CD3DX12_RASTERIZER_DESC2() = default;
-//     explicit CD3DX12_RASTERIZER_DESC2(const D3D12_RASTERIZER_DESC2& o) noexcept :
-//         D3D12_RASTERIZER_DESC2(o)
+pub trait CD3DX12_RASTERIZER_DESC2 {
+    fn from_D3D12_RASTERIZER_DESC1(o: &D3D12_RASTERIZER_DESC1) -> D3D12_RASTERIZER_DESC2 {
+        let line_rasterization_mode = if o.MultisampleEnable {
+            D3D12_LINE_RASTERIZATION_MODE_QUADRILATERAL_WIDE
+        } else if o.AntialiasedLineEnable {
+            D3D12_LINE_RASTERIZATION_MODE_ALPHA_ANTIALIASED
+        } else {
+            D3D12_LINE_RASTERIZATION_MODE_ALIASED
+        };
+        D3D12_RASTERIZER_DESC2 {
+            FillMode: o.FillMode,
+            CullMode: o.CullMode,
+            FrontCounterClockwise: o.FrontCounterClockwise,
+            DepthBias: o.DepthBias,
+            DepthBiasClamp: o.DepthBiasClamp,
+            SlopeScaledDepthBias: o.SlopeScaledDepthBias,
+            DepthClipEnable: o.DepthClipEnable,
+            LineRasterizationMode: line_rasterization_mode,
+            ForcedSampleCount: o.ForcedSampleCount,
+            ConservativeRaster: o.ConservativeRaster,
+        }
+    }
+    fn from_D3D12_RASTERIZER_DESC(o: &D3D12_RASTERIZER_DESC) -> D3D12_RASTERIZER_DESC2 {
+        Self::from_D3D12_RASTERIZER_DESC1(&D3D12_RASTERIZER_DESC1::from_D3D12_RASTERIZER_DESC(o))
+    }
+    fn default() -> D3D12_RASTERIZER_DESC2 {
+        D3D12_RASTERIZER_DESC2 {
+            FillMode: D3D12_FILL_MODE_SOLID,
+            CullMode: D3D12_CULL_MODE_BACK,
+            FrontCounterClockwise: FALSE,
+            DepthBias: D3D12_DEFAULT_DEPTH_BIAS,
+            DepthBiasClamp: D3D12_DEFAULT_DEPTH_BIAS_CLAMP,
+            SlopeScaledDepthBias: D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS,
+            DepthClipEnable: TRUE,
+            LineRasterizationMode: D3D12_LINE_RASTERIZATION_MODE_ALIASED,
+            ForcedSampleCount: 0,
+            ConservativeRaster: D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF,
+        }
+    }
+    fn new(
+        fill_mode: D3D12_FILL_MODE,
+        cull_mode: D3D12_CULL_MODE,
+        front_counter_clockwise: BOOL,
+        depth_bias: f32,
+        depth_bias_clamp: f32,
+        slope_scaled_depth_bias: f32,
+        depth_clip_enable: BOOL,
+        line_rasterization_mode: D3D12_LINE_RASTERIZATION_MODE,
+        forced_sample_count: u32,
+        conservative_raster: D3D12_CONSERVATIVE_RASTERIZATION_MODE,
+    ) -> D3D12_RASTERIZER_DESC2 {
+        D3D12_RASTERIZER_DESC2 {
+            FillMode: fill_mode,
+            CullMode: cull_mode,
+            FrontCounterClockwise: front_counter_clockwise,
+            DepthBias: depth_bias,
+            DepthBiasClamp: depth_bias_clamp,
+            SlopeScaledDepthBias: slope_scaled_depth_bias,
+            DepthClipEnable: depth_clip_enable,
+            LineRasterizationMode: line_rasterization_mode,
+            ForcedSampleCount: forced_sample_count,
+            ConservativeRaster: conservative_raster,
+        }
+    }
+    fn to_D3D12_RASTERIZER_DESC1(&self) -> D3D12_RASTERIZER_DESC1 {
+        let (antialiased_line_enable, multisample_enable) =
+            if self.LineRasterizationMode == D3D12_LINE_RASTERIZATION_MODE_ALPHA_ANTIALIASED {
+                (TRUE, FALSE)
+            } else if self.LineRasterizationMode != D3D12_LINE_RASTERIZATION_MODE_ALIASED {
+                (FALSE, TRUE)
+            } else {
+                (FALSE, FALSE)
+            };
+        D3D12_RASTERIZER_DESC1 {
+            FillMode: self.FillMode,
+            CullMode: self.CullMode,
+            FrontCounterClockwise: self.FrontCounterClockwise,
+            DepthBias: self.DepthBias,
+            DepthBiasClamp: self.DepthBiasClamp,
+            SlopeScaledDepthBias: self.SlopeScaledDepthBias,
+            DepthClipEnable: self.DepthClipEnable,
+            MultisampleEnable: multisample_enable,
+            AntialiasedLineEnable: antialiased_line_enable,
+            ForcedSampleCount: self.ForcedSampleCount,
+            ConservativeRaster: self.ConservativeRaster,
+        }
+    }
 
-//     {
-//     }
-//     explicit CD3DX12_RASTERIZER_DESC2(const D3D12_RASTERIZER_DESC1& o) noexcept
-//     {
-//         FillMode = o.FillMode;
-//         CullMode = o.CullMode;
-//         FrontCounterClockwise = o.FrontCounterClockwise;
-//         DepthBias = o.DepthBias;
-//         DepthBiasClamp = o.DepthBiasClamp;
-//         SlopeScaledDepthBias = o.SlopeScaledDepthBias;
-//         DepthClipEnable = o.DepthClipEnable;
-//         LineRasterizationMode = D3D12_LINE_RASTERIZATION_MODE_ALIASED;
-//         if (o.MultisampleEnable)
-//         {
-//             LineRasterizationMode = D3D12_LINE_RASTERIZATION_MODE_QUADRILATERAL_WIDE;
-//         }
-//         else if (o.AntialiasedLineEnable)
-//         {
-//             LineRasterizationMode = D3D12_LINE_RASTERIZATION_MODE_ALPHA_ANTIALIASED;
-//         }
-//         ForcedSampleCount = o.ForcedSampleCount;
-//         ConservativeRaster = o.ConservativeRaster;
-//     }
-//     explicit CD3DX12_RASTERIZER_DESC2(const D3D12_RASTERIZER_DESC& o) noexcept
-//         : CD3DX12_RASTERIZER_DESC2(CD3DX12_RASTERIZER_DESC1(o))
-//     {
-//     }
-//     explicit CD3DX12_RASTERIZER_DESC2(CD3DX12_DEFAULT) noexcept
-//     {
-//         FillMode = D3D12_FILL_MODE_SOLID;
-//         CullMode = D3D12_CULL_MODE_BACK;
-//         FrontCounterClockwise = FALSE;
-//         DepthBias = D3D12_DEFAULT_DEPTH_BIAS;
-//         DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
-//         SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
-//         DepthClipEnable = TRUE;
-//         LineRasterizationMode = D3D12_LINE_RASTERIZATION_MODE_ALIASED;
-//         ForcedSampleCount = 0;
-//         ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
-//     }
-//     explicit CD3DX12_RASTERIZER_DESC2(
-//         D3D12_FILL_MODE fillMode,
-//         D3D12_CULL_MODE cullMode,
-//         BOOL frontCounterClockwise,
-//         FLOAT depthBias,
-//         FLOAT depthBiasClamp,
-//         FLOAT slopeScaledDepthBias,
-//         BOOL depthClipEnable,
-//         D3D12_LINE_RASTERIZATION_MODE lineRasterizationMode,
-//         UINT forcedSampleCount,
-//         D3D12_CONSERVATIVE_RASTERIZATION_MODE conservativeRaster) noexcept
-//     {
-//         FillMode = fillMode;
-//         CullMode = cullMode;
-//         FrontCounterClockwise = frontCounterClockwise;
-//         DepthBias = depthBias;
-//         DepthBiasClamp = depthBiasClamp;
-//         SlopeScaledDepthBias = slopeScaledDepthBias;
-//         DepthClipEnable = depthClipEnable;
-//         LineRasterizationMode = lineRasterizationMode;
-//         ForcedSampleCount = forcedSampleCount;
-//         ConservativeRaster = conservativeRaster;
-//     }
-
-//     operator D3D12_RASTERIZER_DESC1() const noexcept
-//     {
-//         D3D12_RASTERIZER_DESC1 o;
-
-//         o.FillMode = FillMode;
-//         o.CullMode = CullMode;
-//         o.FrontCounterClockwise = FrontCounterClockwise;
-//         o.DepthBias = DepthBias;
-//         o.DepthBiasClamp = DepthBiasClamp;
-//         o.SlopeScaledDepthBias = SlopeScaledDepthBias;
-//         o.DepthClipEnable = DepthClipEnable;
-//         o.MultisampleEnable = FALSE;
-//         o.AntialiasedLineEnable = FALSE;
-//         if (LineRasterizationMode == D3D12_LINE_RASTERIZATION_MODE_ALPHA_ANTIALIASED)
-//         {
-//             o.AntialiasedLineEnable = TRUE;
-//         }
-//         else if (LineRasterizationMode != D3D12_LINE_RASTERIZATION_MODE_ALIASED)
-//         {
-//             o.MultisampleEnable = TRUE;
-//         }
-//         o.ForcedSampleCount = ForcedSampleCount;
-//         o.ConservativeRaster = ConservativeRaster;
-
-//         return o;
-//     }
-//     operator D3D12_RASTERIZER_DESC() const noexcept
-//     {
-//         return (D3D12_RASTERIZER_DESC)CD3DX12_RASTERIZER_DESC1((D3D12_RASTERIZER_DESC1)*this);
-//     }
-// };
+    //     operator D3D12_RASTERIZER_DESC() const noexcept
+    //     {
+    //         return (D3D12_RASTERIZER_DESC)CD3DX12_RASTERIZER_DESC1((D3D12_RASTERIZER_DESC1)*this);
+    //     }
+}
+impl CD3DX12_RASTERIZER_DESC2 for D3D12_RASTERIZER_DESC2 {}
 // #endif // D3D12_SDK_VERSION >= 610
 
-// //------------------------------------------------------------------------------------------------
-// struct CD3DX12_RESOURCE_ALLOCATION_INFO : public D3D12_RESOURCE_ALLOCATION_INFO
-// {
-//     CD3DX12_RESOURCE_ALLOCATION_INFO() = default;
-//     explicit CD3DX12_RESOURCE_ALLOCATION_INFO( const D3D12_RESOURCE_ALLOCATION_INFO& o ) noexcept :
-//         D3D12_RESOURCE_ALLOCATION_INFO( o )
-//     {}
-//     CD3DX12_RESOURCE_ALLOCATION_INFO(
-//         UINT64 size,
-//         UINT64 alignment ) noexcept
-//     {
-//         SizeInBytes = size;
-//         Alignment = alignment;
-//     }
-// };
+//------------------------------------------------------------------------------------------------
+pub trait CD3DX12_RESOURCE_ALLOCATION_INFO {
+    fn new(size: u64, alignment: u64) -> D3D12_RESOURCE_ALLOCATION_INFO {
+        D3D12_RESOURCE_ALLOCATION_INFO {
+            SizeInBytes: size,
+            Alignment: alignment,
+        }
+    }
+}
+impl CD3DX12_RESOURCE_ALLOCATION_INFO for D3D12_RESOURCE_ALLOCATION_INFO {}
 
-// //------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------
 pub trait CD3DX12_HEAP_PROPERTIES {
     fn new_custom(
         cpu_page_property: D3D12_CPU_PAGE_PROPERTY,
@@ -820,117 +811,158 @@ impl CD3DX12_HEAP_PROPERTIES for D3D12_HEAP_PROPERTIES {
     }
 }
 
-// //------------------------------------------------------------------------------------------------
-// struct CD3DX12_HEAP_DESC : public D3D12_HEAP_DESC
-// {
-//     CD3DX12_HEAP_DESC() = default;
-//     explicit CD3DX12_HEAP_DESC(const D3D12_HEAP_DESC &o) noexcept :
-//         D3D12_HEAP_DESC(o)
-//     {}
-//     CD3DX12_HEAP_DESC(
-//         UINT64 size,
-//         D3D12_HEAP_PROPERTIES properties,
-//         UINT64 alignment = 0,
-//         D3D12_HEAP_FLAGS flags = D3D12_HEAP_FLAG_NONE ) noexcept
-//     {
-//         SizeInBytes = size;
-//         Properties = properties;
-//         Alignment = alignment;
-//         Flags = flags;
-//     }
-//     CD3DX12_HEAP_DESC(
-//         UINT64 size,
-//         D3D12_HEAP_TYPE type,
-//         UINT64 alignment = 0,
-//         D3D12_HEAP_FLAGS flags = D3D12_HEAP_FLAG_NONE ) noexcept
-//     {
-//         SizeInBytes = size;
-//         Properties = CD3DX12_HEAP_PROPERTIES( type );
-//         Alignment = alignment;
-//         Flags = flags;
-//     }
-//     CD3DX12_HEAP_DESC(
-//         UINT64 size,
-//         D3D12_CPU_PAGE_PROPERTY cpuPageProperty,
-//         D3D12_MEMORY_POOL memoryPoolPreference,
-//         UINT64 alignment = 0,
-//         D3D12_HEAP_FLAGS flags = D3D12_HEAP_FLAG_NONE ) noexcept
-//     {
-//         SizeInBytes = size;
-//         Properties = CD3DX12_HEAP_PROPERTIES( cpuPageProperty, memoryPoolPreference );
-//         Alignment = alignment;
-//         Flags = flags;
-//     }
-//     CD3DX12_HEAP_DESC(
-//         const D3D12_RESOURCE_ALLOCATION_INFO& resAllocInfo,
-//         D3D12_HEAP_PROPERTIES properties,
-//         D3D12_HEAP_FLAGS flags = D3D12_HEAP_FLAG_NONE ) noexcept
-//     {
-//         SizeInBytes = resAllocInfo.SizeInBytes;
-//         Properties = properties;
-//         Alignment = resAllocInfo.Alignment;
-//         Flags = flags;
-//     }
-//     CD3DX12_HEAP_DESC(
-//         const D3D12_RESOURCE_ALLOCATION_INFO& resAllocInfo,
-//         D3D12_HEAP_TYPE type,
-//         D3D12_HEAP_FLAGS flags = D3D12_HEAP_FLAG_NONE ) noexcept
-//     {
-//         SizeInBytes = resAllocInfo.SizeInBytes;
-//         Properties = CD3DX12_HEAP_PROPERTIES( type );
-//         Alignment = resAllocInfo.Alignment;
-//         Flags = flags;
-//     }
-//     CD3DX12_HEAP_DESC(
-//         const D3D12_RESOURCE_ALLOCATION_INFO& resAllocInfo,
-//         D3D12_CPU_PAGE_PROPERTY cpuPageProperty,
-//         D3D12_MEMORY_POOL memoryPoolPreference,
-//         D3D12_HEAP_FLAGS flags = D3D12_HEAP_FLAG_NONE ) noexcept
-//     {
-//         SizeInBytes = resAllocInfo.SizeInBytes;
-//         Properties = CD3DX12_HEAP_PROPERTIES( cpuPageProperty, memoryPoolPreference );
-//         Alignment = resAllocInfo.Alignment;
-//         Flags = flags;
-//     }
-//     bool IsCPUAccessible() const noexcept
-//     { return static_cast< const CD3DX12_HEAP_PROPERTIES* >( &Properties )->IsCPUAccessible(); }
-// };
-// inline bool operator==( const D3D12_HEAP_DESC& l, const D3D12_HEAP_DESC& r ) noexcept
-// {
-//     return l.SizeInBytes == r.SizeInBytes &&
-//         l.Properties == r.Properties &&
-//         l.Alignment == r.Alignment &&
-//         l.Flags == r.Flags;
-// }
-// inline bool operator!=( const D3D12_HEAP_DESC& l, const D3D12_HEAP_DESC& r ) noexcept
-// { return !( l == r ); }
+//------------------------------------------------------------------------------------------------
 
-// //------------------------------------------------------------------------------------------------
-// struct CD3DX12_CLEAR_VALUE : public D3D12_CLEAR_VALUE
-// {
-//     CD3DX12_CLEAR_VALUE() = default;
-//     explicit CD3DX12_CLEAR_VALUE(const D3D12_CLEAR_VALUE &o) noexcept :
-//         D3D12_CLEAR_VALUE(o)
-//     {}
-//     CD3DX12_CLEAR_VALUE(
-//         DXGI_FORMAT format,
-//         const FLOAT color[4] ) noexcept
-//     {
-//         Format = format;
-//         memcpy( Color, color, sizeof( Color ) );
-//     }
-//     CD3DX12_CLEAR_VALUE(
-//         DXGI_FORMAT format,
-//         FLOAT depth,
-//         UINT8 stencil ) noexcept
-//     {
-//         Format = format;
-//         memset( &Color, 0, sizeof( Color ) );
-//         /* Use memcpy to preserve NAN values */
-//         memcpy( &DepthStencil.Depth, &depth, sizeof( depth ) );
-//         DepthStencil.Stencil = stencil;
-//     }
-// };
+pub trait CD3DX12_HEAP_DESC {
+    fn new_with_properties(
+        size: u64,
+        properties: D3D12_HEAP_PROPERTIES,
+        alignment: Option<u64>,
+        flags: Option<D3D12_HEAP_FLAGS>,
+    ) -> D3D12_HEAP_DESC {
+        let alignment = alignment.unwrap_or(0);
+        let flags = flags.unwrap_or(D3D12_HEAP_FLAG_NONE);
+        D3D12_HEAP_DESC {
+            SizeInBytes: size,
+            Properties: properties,
+            Alignment: alignment,
+            Flags: flags,
+        }
+    }
+    fn new_with_type(
+        size: u64,
+        r#type: D3D12_HEAP_TYPE,
+        alignment: Option<u64>,
+        flags: Option<D3D12_HEAP_FLAGS>,
+    ) -> D3D12_HEAP_DESC {
+        let alignment = alignment.unwrap_or(0);
+        let flags = flags.unwrap_or(D3D12_HEAP_FLAG_NONE);
+        D3D12_HEAP_DESC {
+            SizeInBytes: size,
+            Properties: CD3DX12_HEAP_PROPERTIES::new_with_type(r#type, None, None),
+            Alignment: alignment,
+            Flags: flags,
+        }
+    }
+    fn new_with_cpu_page_property(
+        size: u64,
+        cpu_page_property: D3D12_CPU_PAGE_PROPERTY,
+        memory_pool_preference: D3D12_MEMORY_POOL,
+        alignment: Option<u64>,
+        flags: Option<D3D12_HEAP_FLAGS>,
+    ) -> D3D12_HEAP_DESC {
+        let alignment = alignment.unwrap_or(0);
+        let flags = flags.unwrap_or(D3D12_HEAP_FLAG_NONE);
+        D3D12_HEAP_DESC {
+            SizeInBytes: size,
+            Properties: CD3DX12_HEAP_PROPERTIES::new_custom(
+                cpu_page_property,
+                memory_pool_preference,
+                None,
+                None,
+            ),
+            Alignment: alignment,
+            Flags: flags,
+        }
+    }
+    fn new_with_res_alloc_info(
+        res_alloc_info: D3D12_RESOURCE_ALLOCATION_INFO,
+        properties: D3D12_HEAP_PROPERTIES,
+        flags: Option<D3D12_HEAP_FLAGS>,
+    ) -> D3D12_HEAP_DESC {
+        let flags = flags.unwrap_or(D3D12_HEAP_FLAG_NONE);
+        D3D12_HEAP_DESC {
+            SizeInBytes: res_alloc_info.SizeInBytes,
+            Properties: properties,
+            Alignment: res_alloc_info.Alignment,
+            Flags: flags,
+        }
+    }
+    fn new_with_res_and_type(
+        res_alloc_info: D3D12_RESOURCE_ALLOCATION_INFO,
+        r#type: D3D12_HEAP_TYPE,
+        flags: Option<D3D12_HEAP_FLAGS>,
+    ) -> D3D12_HEAP_DESC {
+        let flags = flags.unwrap_or(D3D12_HEAP_FLAG_NONE);
+        D3D12_HEAP_DESC {
+            SizeInBytes: res_alloc_info.SizeInBytes,
+            Properties: CD3DX12_HEAP_PROPERTIES::new_with_type(r#type, None, None),
+            Alignment: res_alloc_info.Alignment,
+            Flags: flags,
+        }
+    }
+    fn new_with_res_alloc_info_and_cpu_page_property(
+        res_alloc_info: D3D12_RESOURCE_ALLOCATION_INFO,
+        cpu_page_property: D3D12_CPU_PAGE_PROPERTY,
+        memory_pool_preference: D3D12_MEMORY_POOL,
+        flags: Option<D3D12_HEAP_FLAGS>,
+    ) -> D3D12_HEAP_DESC {
+        let flags = flags.unwrap_or(D3D12_HEAP_FLAG_NONE);
+        D3D12_HEAP_DESC {
+            SizeInBytes: res_alloc_info.SizeInBytes,
+            Properties: CD3DX12_HEAP_PROPERTIES::new_custom(
+                cpu_page_property,
+                memory_pool_preference,
+                None,
+                None,
+            ),
+            Alignment: res_alloc_info.Alignment,
+            Flags: flags,
+        }
+    }
+    fn is_cpu_accessible(&self) -> bool;
+}
+
+impl CD3DX12_HEAP_DESC for D3D12_HEAP_DESC {
+    fn is_cpu_accessible(&self) -> bool {
+        self.Properties.is_cpu_accessible()
+    }
+}
+
+//------------------------------------------------------------------------------------------------
+pub trait CD3DX12_CLEAR_VALUE {
+    fn new_color(format: DXGI_FORMAT, color: [f32; 4]) -> D3D12_CLEAR_VALUE {
+        D3D12_CLEAR_VALUE {
+            Format: format,
+            Anonymous: D3D12_CLEAR_VALUE_0 { Color: color },
+        }
+    }
+    fn new_depth_stencil(format: DXGI_FORMAT, depth: f32, stencil: u8) -> D3D12_CLEAR_VALUE {
+        let mut clear_value = D3D12_CLEAR_VALUE {
+            Format: format,
+            Anonymous: D3D12_CLEAR_VALUE_0 {
+                // TODO: This was in the original code. Is it necessary?
+                Color: unsafe { core::mem::zeroed() },
+            },
+        };
+        clear_value.Anonymous.DepthStencil = D3D12_DEPTH_STENCIL_VALUE {
+            // TODO: This was in the original code. Is it necessary?
+            // Use memcpy to preserve NAN values
+            // memcpy( &DepthStencil.Depth, &depth, sizeof( depth ) );
+            Depth: depth,
+            Stencil: stencil,
+        };
+        clear_value
+    }
+}
+impl CD3DX12_CLEAR_VALUE for D3D12_CLEAR_VALUE {}
+impl PartialEq for CD3DX12_CLEAR_VALUE {
+    fn eq(&self, other: &Self) -> bool {
+        if self.Format != other.Format {
+            return false;
+        }
+        if self.Format == DXGI_FORMAT_D24_UNORM_S8_UINT
+            || self.Format == DXGI_FORMAT_D16_UNORM
+            || self.Format == DXGI_FORMAT_D32_FLOAT
+            || self.Format == DXGI_FORMAT_D32_FLOAT_S8X24_UINT
+        {
+            return self.Anonymous.DepthStencil.Depth == other.Anonymous.DepthStencil.Depth
+                && self.Anonymous.DepthStencil.Stencil == other.Anonymous.DepthStencil.Stencil;
+        } else {
+            return self.Anonymous.Color == other.Anonymous.Color;
+        }
+    }
+}
 
 // //------------------------------------------------------------------------------------------------
 // inline bool operator==( const D3D12_CLEAR_VALUE &a, const D3D12_CLEAR_VALUE &b) noexcept
@@ -971,48 +1003,40 @@ impl CD3DX12_RANGE {
     }
 }
 
-// //------------------------------------------------------------------------------------------------
-// struct CD3DX12_RANGE_UINT64 : public D3D12_RANGE_UINT64
-// {
-//     CD3DX12_RANGE_UINT64() = default;
-//     explicit CD3DX12_RANGE_UINT64(const D3D12_RANGE_UINT64 &o) noexcept :
-//         D3D12_RANGE_UINT64(o)
-//     {}
-//     CD3DX12_RANGE_UINT64(
-//         UINT64 begin,
-//         UINT64 end ) noexcept
-//     {
-//         Begin = begin;
-//         End = end;
-//     }
-// };
+//------------------------------------------------------------------------------------------------
+pub trait CD3DX12_RANGE_UINT64 {
+    fn new(begin: u64, end: u64) -> D3D12_RANGE_UINT64 {
+        D3D12_RANGE_UINT64 {
+            Begin: begin,
+            End: end,
+        }
+    }
+}
+impl CD3DX12_RANGE_UINT64 for D3D12_RANGE_UINT64 {}
 
-// //------------------------------------------------------------------------------------------------
-// struct CD3DX12_SUBRESOURCE_RANGE_UINT64 : public D3D12_SUBRESOURCE_RANGE_UINT64
-// {
-//     CD3DX12_SUBRESOURCE_RANGE_UINT64() = default;
-//     explicit CD3DX12_SUBRESOURCE_RANGE_UINT64(const D3D12_SUBRESOURCE_RANGE_UINT64 &o) noexcept :
-//         D3D12_SUBRESOURCE_RANGE_UINT64(o)
-//     {}
-//     CD3DX12_SUBRESOURCE_RANGE_UINT64(
-//         UINT subresource,
-//         const D3D12_RANGE_UINT64& range ) noexcept
-//     {
-//         Subresource = subresource;
-//         Range = range;
-//     }
-//     CD3DX12_SUBRESOURCE_RANGE_UINT64(
-//         UINT subresource,
-//         UINT64 begin,
-//         UINT64 end ) noexcept
-//     {
-//         Subresource = subresource;
-//         Range.Begin = begin;
-//         Range.End = end;
-//     }
-// };
+//------------------------------------------------------------------------------------------------
+pub trait CD3DX12_SUBRESOURCE_RANGE_UINT64 {
+    fn new_with_range(
+        subresource: u32,
+        range: D3D12_RANGE_UINT64,
+    ) -> D3D12_SUBRESOURCE_RANGE_UINT64 {
+        D3D12_SUBRESOURCE_RANGE_UINT64 {
+            Subresource: subresource,
+            Range: range,
+        }
+    }
+    fn new(subresource: u32, begin: u64, end: u64) -> D3D12_SUBRESOURCE_RANGE_UINT64 {
+        D3D12_SUBRESOURCE_RANGE_UINT64 {
+            Subresource: subresource,
+            Range: D3D12_RANGE_UINT64 {
+                Begin: begin,
+                End: end,
+            },
+        }
+    }
+}
 
-// //------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------
 #[allow(non_camel_case_types)]
 pub trait CD3DX12_SHADER_BYTECODE {
     #[allow(non_snake_case)]
@@ -1032,25 +1056,6 @@ pub trait CD3DX12_SHADER_BYTECODE {
 }
 
 impl CD3DX12_SHADER_BYTECODE for D3D12_SHADER_BYTECODE {}
-// {
-//     CD3DX12_SHADER_BYTECODE() = default;
-//     explicit CD3DX12_SHADER_BYTECODE(const D3D12_SHADER_BYTECODE &o) noexcept :
-//         D3D12_SHADER_BYTECODE(o)
-//     {}
-//     CD3DX12_SHADER_BYTECODE(
-//         _In_ ID3DBlob* pShaderBlob ) noexcept
-//     {
-//         pShaderBytecode = pShaderBlob->GetBufferPointer();
-//         BytecodeLength = pShaderBlob->GetBufferSize();
-//     }
-//     CD3DX12_SHADER_BYTECODE(
-//         const void* _pShaderBytecode,
-//         SIZE_T bytecodeLength ) noexcept
-//     {
-//         pShaderBytecode = _pShaderBytecode;
-//         BytecodeLength = bytecodeLength;
-//     }
-// };
 
 // //------------------------------------------------------------------------------------------------
 // struct CD3DX12_TILED_RESOURCE_COORDINATE : public D3D12_TILED_RESOURCE_COORDINATE
