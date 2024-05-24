@@ -1057,176 +1057,156 @@ pub trait CD3DX12_SHADER_BYTECODE {
 
 impl CD3DX12_SHADER_BYTECODE for D3D12_SHADER_BYTECODE {}
 
-// //------------------------------------------------------------------------------------------------
-// struct CD3DX12_TILED_RESOURCE_COORDINATE : public D3D12_TILED_RESOURCE_COORDINATE
-// {
-//     CD3DX12_TILED_RESOURCE_COORDINATE() = default;
-//     explicit CD3DX12_TILED_RESOURCE_COORDINATE(const D3D12_TILED_RESOURCE_COORDINATE &o) noexcept :
-//         D3D12_TILED_RESOURCE_COORDINATE(o)
-//     {}
-//     CD3DX12_TILED_RESOURCE_COORDINATE(
-//         UINT x,
-//         UINT y,
-//         UINT z,
-//         UINT subresource ) noexcept
-//     {
-//         X = x;
-//         Y = y;
-//         Z = z;
-//         Subresource = subresource;
-//     }
-// };
-
-// //------------------------------------------------------------------------------------------------
-// struct CD3DX12_TILE_REGION_SIZE : public D3D12_TILE_REGION_SIZE
-// {
-//     CD3DX12_TILE_REGION_SIZE() = default;
-//     explicit CD3DX12_TILE_REGION_SIZE(const D3D12_TILE_REGION_SIZE &o) noexcept :
-//         D3D12_TILE_REGION_SIZE(o)
-//     {}
-//     CD3DX12_TILE_REGION_SIZE(
-//         UINT numTiles,
-//         BOOL useBox,
-//         UINT width,
-//         UINT16 height,
-//         UINT16 depth ) noexcept
-//     {
-//         NumTiles = numTiles;
-//         UseBox = useBox;
-//         Width = width;
-//         Height = height;
-//         Depth = depth;
-//     }
-// };
-
-// //------------------------------------------------------------------------------------------------
-// struct CD3DX12_SUBRESOURCE_TILING : public D3D12_SUBRESOURCE_TILING
-// {
-//     CD3DX12_SUBRESOURCE_TILING() = default;
-//     explicit CD3DX12_SUBRESOURCE_TILING(const D3D12_SUBRESOURCE_TILING &o) noexcept :
-//         D3D12_SUBRESOURCE_TILING(o)
-//     {}
-//     CD3DX12_SUBRESOURCE_TILING(
-//         UINT widthInTiles,
-//         UINT16 heightInTiles,
-//         UINT16 depthInTiles,
-//         UINT startTileIndexInOverallResource ) noexcept
-//     {
-//         WidthInTiles = widthInTiles;
-//         HeightInTiles = heightInTiles;
-//         DepthInTiles = depthInTiles;
-//         StartTileIndexInOverallResource = startTileIndexInOverallResource;
-//     }
-// };
-
-// //------------------------------------------------------------------------------------------------
-// struct CD3DX12_TILE_SHAPE : public D3D12_TILE_SHAPE
-// {
-//     CD3DX12_TILE_SHAPE() = default;
-//     explicit CD3DX12_TILE_SHAPE(const D3D12_TILE_SHAPE &o) noexcept :
-//         D3D12_TILE_SHAPE(o)
-//     {}
-//     CD3DX12_TILE_SHAPE(
-//         UINT widthInTexels,
-//         UINT heightInTexels,
-//         UINT depthInTexels ) noexcept
-//     {
-//         WidthInTexels = widthInTexels;
-//         HeightInTexels = heightInTexels;
-//         DepthInTexels = depthInTexels;
-//     }
-// };
-
-// //------------------------------------------------------------------------------------------------
-// struct CD3DX12_PACKED_MIP_INFO : public D3D12_PACKED_MIP_INFO
-// {
-//     CD3DX12_PACKED_MIP_INFO() = default;
-//     explicit CD3DX12_PACKED_MIP_INFO(const D3D12_PACKED_MIP_INFO &o) noexcept :
-//         D3D12_PACKED_MIP_INFO(o)
-//     {}
-//     CD3DX12_PACKED_MIP_INFO(
-//         UINT8 numStandardMips,
-//         UINT8 numPackedMips,
-//         UINT numTilesForPackedMips,
-//         UINT startTileIndexInOverallResource ) noexcept
-//     {
-//         NumStandardMips = numStandardMips;
-//         NumPackedMips = numPackedMips;
-//         NumTilesForPackedMips = numTilesForPackedMips;
-//         StartTileIndexInOverallResource = startTileIndexInOverallResource;
-//     }
-// };
-
-// //------------------------------------------------------------------------------------------------
-// struct CD3DX12_SUBRESOURCE_FOOTPRINT : public D3D12_SUBRESOURCE_FOOTPRINT
-// {
-//     CD3DX12_SUBRESOURCE_FOOTPRINT() = default;
-//     explicit CD3DX12_SUBRESOURCE_FOOTPRINT(const D3D12_SUBRESOURCE_FOOTPRINT &o) noexcept :
-//         D3D12_SUBRESOURCE_FOOTPRINT(o)
-//     {}
-//     CD3DX12_SUBRESOURCE_FOOTPRINT(
-//         DXGI_FORMAT format,
-//         UINT width,
-//         UINT height,
-//         UINT depth,
-//         UINT rowPitch ) noexcept
-//     {
-//         Format = format;
-//         Width = width;
-//         Height = height;
-//         Depth = depth;
-//         RowPitch = rowPitch;
-//     }
-//     explicit CD3DX12_SUBRESOURCE_FOOTPRINT(
-//         const D3D12_RESOURCE_DESC& resDesc,
-//         UINT rowPitch ) noexcept
-//     {
-//         Format = resDesc.Format;
-//         Width = UINT( resDesc.Width );
-//         Height = resDesc.Height;
-//         Depth = (resDesc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D ? resDesc.DepthOrArraySize : 1u);
-//         RowPitch = rowPitch;
-//     }
-// };
+//------------------------------------------------------------------------------------------------
+pub trait CD3DX12_TILED_RESOURCE_COORDINATE {
+    fn new(x: u32, y: u32, z: u32, subresource: u32) -> D3D12_TILED_RESOURCE_COORDINATE {
+        D3D12_TILED_RESOURCE_COORDINATE {
+            X: x,
+            Y: y,
+            Z: z,
+            Subresource: subresource,
+        }
+    }
+}
+impl CD3DX12_TILED_RESOURCE_COORDINATE for D3D12_TILED_RESOURCE_COORDINATE {}
 
 //------------------------------------------------------------------------------------------------
-pub struct CD3DX12_TEXTURE_COPY_LOCATION(pub D3D12_TEXTURE_COPY_LOCATION);
-impl CD3DX12_TEXTURE_COPY_LOCATION {
-    // CD3DX12_TEXTURE_COPY_LOCATION() = default;
-    // explicit CD3DX12_TEXTURE_COPY_LOCATION(const D3D12_TEXTURE_COPY_LOCATION &o) noexcept :
-    //     D3D12_TEXTURE_COPY_LOCATION(o)
-    // {}
-    // CD3DX12_TEXTURE_COPY_LOCATION(_In_ ID3D12Resource* pRes) noexcept
-    // {
-    //     pResource = pRes;
-    //     Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-    //     PlacedFootprint = {};
-    // }
-    // CD3DX12_TEXTURE_COPY_LOCATION(_In_ ID3D12Resource* pRes, D3D12_PLACED_SUBRESOURCE_FOOTPRINT const& Footprint) noexcept
-    pub fn new_with_placed_footprint(
-        pRes: &ID3D12Resource,
-        Footprint: &D3D12_PLACED_SUBRESOURCE_FOOTPRINT,
+pub trait CD3DX12_TILE_REGION_SIZE {
+    fn new(
+        num_tiles: u32,
+        use_box: BOOL,
+        width: u32,
+        height: u16,
+        depth: u16,
+    ) -> D3D12_TILE_REGION_SIZE {
+        D3D12_TILE_REGION_SIZE {
+            NumTiles: num_tiles,
+            UseBox: use_box,
+            Width: width,
+            Height: height,
+            Depth: depth,
+        }
+    }
+}
+impl CD3DX12_TILE_REGION_SIZE for D3D12_TILE_REGION_SIZE {}
+
+//------------------------------------------------------------------------------------------------
+pub trait CD3DX12_SUBRESOURCE_TILING {
+    fn new(
+        width_in_tiles: u32,
+        height_in_tiles: u16,
+        depth_in_tiles: u16,
+        start_tile_index_in_overall_resource: u32,
+    ) -> D3D12_SUBRESOURCE_TILING {
+        D3D12_SUBRESOURCE_TILING {
+            WidthInTiles: width_in_tiles,
+            HeightInTiles: height_in_tiles,
+            DepthInTiles: depth_in_tiles,
+            StartTileIndexInOverallResource: start_tile_index_in_overall_resource,
+        }
+    }
+}
+impl CD3DX12_SUBRESOURCE_TILING for D3D12_SUBRESOURCE_TILING {}
+
+//------------------------------------------------------------------------------------------------
+pub trait CD3DX12_TILE_SHAPE {
+    fn new(width_in_texels: u32, height_in_texels: u32, depth_in_texels: u32) -> D3D12_TILE_SHAPE {
+        D3D12_TILE_SHAPE {
+            WidthInTexels: width_in_texels,
+            HeightInTexels: height_in_texels,
+            DepthInTexels: depth_in_texels,
+        }
+    }
+}
+impl CD3DX12_TILE_SHAPE for D3D12_TILE_SHAPE {}
+
+//------------------------------------------------------------------------------------------------
+pub trait CD3DX12_PACKED_MIP_INFO {
+    fn new(
+        num_standard_mips: u8,
+        num_packed_mips: u8,
+        num_tiles_for_packed_mips: u32,
+        start_tile_index_in_overall_resource: u32,
+    ) -> D3D12_PACKED_MIP_INFO {
+        D3D12_PACKED_MIP_INFO {
+            NumStandardMips: num_standard_mips,
+            NumPackedMips: num_packed_mips,
+            NumTilesForPackedMips: num_tiles_for_packed_mips,
+            StartTileIndexInOverallResource: start_tile_index_in_overall_resource,
+        }
+    }
+}
+impl CD3DX12_PACKED_MIP_INFO for D3D12_PACKED_MIP_INFO {}
+
+//------------------------------------------------------------------------------------------------
+pub trait CD3DX12_SUBRESOURCE_FOOTPRINT {
+    fn new(
+        format: DXGI_FORMAT,
+        width: u32,
+        height: u32,
+        depth: u32,
+        row_pitch: u32,
+    ) -> D3D12_SUBRESOURCE_FOOTPRINT {
+        D3D12_SUBRESOURCE_FOOTPRINT {
+            Format: format,
+            Width: width,
+            Height: height,
+            Depth: depth,
+            RowPitch: row_pitch,
+        }
+    }
+    fn from_res_desc(
+        res_desc: &D3D12_RESOURCE_DESC,
+        row_pitch: u32,
+    ) -> D3D12_SUBRESOURCE_FOOTPRINT {
+        D3D12_SUBRESOURCE_FOOTPRINT {
+            Format: res_desc.Format,
+            Width: res_desc.Width as u32,
+            Height: res_desc.Height,
+            Depth: if res_desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D {
+                res_desc.DepthOrArraySize
+            } else {
+                1
+            },
+            RowPitch: row_pitch,
+        }
+    }
+}
+impl CD3DX12_SUBRESOURCE_FOOTPRINT for D3D12_SUBRESOURCE_FOOTPRINT {}
+
+//------------------------------------------------------------------------------------------------
+pub trait CD3DX12_TEXTURE_COPY_LOCATION {
+    fn new(resource: &ID3D12Resource) -> Self {
+        Self(D3D12_TEXTURE_COPY_LOCATION {
+            pResource: unsafe { std::mem::transmute_copy(resource) },
+            Type: D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+            Anonymous: D3D12_TEXTURE_COPY_LOCATION_0::default(),
+        })
+    }
+    fn new_with_placed_footprint(
+        resource: &ID3D12Resource,
+        footprint: &D3D12_PLACED_SUBRESOURCE_FOOTPRINT,
     ) -> Self {
         Self(D3D12_TEXTURE_COPY_LOCATION {
-            pResource: unsafe { std::mem::transmute_copy(pRes) },
+            pResource: unsafe { std::mem::transmute_copy(resource) },
             Type: D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
             Anonymous: D3D12_TEXTURE_COPY_LOCATION_0 {
-                PlacedFootprint: *Footprint,
+                PlacedFootprint: *footprint,
             },
         })
     }
 
-    // pub fn CD3DX12_TEXTURE_COPY_LOCATION(pRes: &ID3D12Resource, Sub: u32) -> Self {
-    pub fn new_with_subresource_index(pRes: &ID3D12Resource, Sub: u32) -> Self {
+    fn new_with_subresource_index(resource: &ID3D12Resource, subresource_index: u32) -> Self {
         Self(D3D12_TEXTURE_COPY_LOCATION {
-            pResource: unsafe { std::mem::transmute_copy(pRes) },
+            pResource: unsafe { std::mem::transmute_copy(resource) },
             Type: D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
             Anonymous: D3D12_TEXTURE_COPY_LOCATION_0 {
-                SubresourceIndex: Sub,
+                SubresourceIndex: subresource_index,
             },
         })
     }
 }
+impl CD3DX12_TEXTURE_COPY_LOCATION for D3D12_TEXTURE_COPY_LOCATION {}
 
 // //------------------------------------------------------------------------------------------------
 // constexpr UINT D3D12CalcSubresource( UINT MipSlice, UINT ArraySlice, UINT PlaneSlice, UINT MipLevels, UINT ArraySize ) noexcept
