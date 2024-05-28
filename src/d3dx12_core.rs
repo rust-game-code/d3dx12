@@ -966,10 +966,13 @@ impl PartialEq for D3DX12_CLEAR_VALUE_TYPE {
             || self.0.Format == DXGI_FORMAT_D32_FLOAT
             || self.0.Format == DXGI_FORMAT_D32_FLOAT_S8X24_UINT
         {
-            return self.0.Anonymous.DepthStencil.Depth == other.0.Anonymous.DepthStencil.Depth
-                && self.0.Anonymous.DepthStencil.Stencil == other.0.Anonymous.DepthStencil.Stencil;
+            unsafe {
+                self.0.Anonymous.DepthStencil.Depth == other.0.Anonymous.DepthStencil.Depth
+                    && self.0.Anonymous.DepthStencil.Stencil
+                        == other.0.Anonymous.DepthStencil.Stencil
+            }
         } else {
-            return self.0.Anonymous.Color == other.0.Anonymous.Color;
+            unsafe { self.0.Anonymous.Color == other.0.Anonymous.Color }
         }
     }
 }

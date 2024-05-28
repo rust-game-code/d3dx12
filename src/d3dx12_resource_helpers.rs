@@ -1,4 +1,4 @@
-use core::{num, slice};
+use core::slice;
 use std::{
     alloc::{alloc, dealloc, Layout},
     cmp::max,
@@ -13,9 +13,7 @@ use std::{
 // Licensed under the MIT License (MIT).
 //
 //*********************************************************
-use windows::Win32::{
-    Foundation::STATUS_LAPS_ENCRYPTION_REQUIRES_2016_DFL, Graphics::Direct3D12::*,
-};
+use windows::Win32::Graphics::Direct3D12::*;
 
 use crate::d3dx12_core::CD3DX12_TEXTURE_COPY_LOCATION;
 
@@ -37,38 +35,35 @@ use crate::d3dx12_core::CD3DX12_TEXTURE_COPY_LOCATION;
 //     PlaneSlice = static_cast<V>(Subresource / (MipLevels * ArraySize));
 // }
 #[inline]
-pub fn d3d12_decompose_subresource<T, U, V>(
+pub fn d3d12_decompose_subresource(
     subresource: u32,
     mip_levels: u32,
     array_size: u32,
-    mip_slice: &mut T,
-    array_slice: &mut U,
-    plane_slice: &mut V,
-) {
-    mip_slice = subresource % mip_levels;
-    array_slice = (subresource / mip_levels) % array_size;
-    plane_slice = subresource / (mip_levels * array_size);
+) -> (u32, u32, u32) {
+    let mip_slice = subresource % mip_levels;
+    let array_slice = (subresource / mip_levels) % array_size;
+    let plane_slice = subresource / (mip_levels * array_size);
     (mip_slice, array_slice, plane_slice)
 }
 
 //------------------------------------------------------------------------------------------------
 // Row-by-row memcpy
 #[inline]
-unsafe fn MemcpySubresource(
-    pDest: &D3D12_MEMCPY_DEST,
-    pSrc: &D3D12_SUBRESOURCE_DATA,
-    RowSizeInBytes: usize,
-    NumRows: u32,
-    NumSlices: u32,
+unsafe fn memcpy_subresource(
+    p_dest: &D3D12_MEMCPY_DEST,
+    p_src: &D3D12_SUBRESOURCE_DATA,
+    row_size_in_bytes: usize,
+    num_rows: u32,
+    num_slices: u32,
 ) {
-    for z in 0..NumSlices as usize {
-        let pDestSlice = (pDest.pData as *mut u8).add(pDest.SlicePitch * z);
-        let pSrcSlice = (pSrc.pData as *mut u8).add(pSrc.SlicePitch as usize * z);
-        for y in 0..NumRows as usize {
+    for z in 0..num_slices as usize {
+        let p_dest_slice = (p_dest.pData as *mut u8).add(p_dest.SlicePitch * z);
+        let p_src_slice = (p_src.pData as *mut u8).add(p_src.SlicePitch as usize * z);
+        for y in 0..num_rows as usize {
             copy_nonoverlapping(
-                pSrcSlice.add(pSrc.RowPitch as usize * y),
-                pDestSlice.add(pDest.RowPitch as usize * y),
-                RowSizeInBytes,
+                p_src_slice.add(p_src.RowPitch as usize * y),
+                p_dest_slice.add(p_dest.RowPitch * y),
+                row_size_in_bytes,
             );
         }
     }
@@ -86,14 +81,14 @@ unsafe fn memcpy_subresource_with_resource_data(
     num_slices: u32,
 ) {
     for z in 0..num_slices as usize {
-        let pDestSlice = (p_dest.pData as *mut u8).add(p_dest.SlicePitch * z);
-        let pSrcSlice = (p_resource_data as *mut u8)
+        let p_dest_slice = (p_dest.pData as *mut u8).add(p_dest.SlicePitch * z);
+        let p_src_slice = (p_resource_data as *mut u8)
             .add(p_src.Offset as usize)
             .add(p_src.DepthPitch as usize * z);
         for y in 0..num_rows as usize {
             copy_nonoverlapping(
-                pSrcSlice.add(p_src.RowPitch as usize * y),
-                pDestSlice.add(p_dest.RowPitch as usize * y),
+                p_src_slice.add(p_src.RowPitch as usize * y),
+                p_dest_slice.add(p_dest.RowPitch * y),
                 row_size_in_bytes,
             );
         }
@@ -122,7 +117,7 @@ pub fn get_required_intermediate_size(
     let mut required_size = 0;
 
     let mut device: Option<ID3D12Device> = None;
-    if let Ok(_) = unsafe { destination_resource.GetDevice(&mut device) } {
+    if unsafe { destination_resource.GetDevice(&mut device) }.is_ok() {
         if let Some(device) = device {
             unsafe {
                 device.GetCopyableFootprints(
@@ -140,7 +135,7 @@ pub fn get_required_intermediate_size(
     };
     // pDevice->Release();
 
-    return required_size;
+    required_size
 }
 // inline UINT64 GetRequiredIntermediateSize(
 //     _In_ ID3D12Resource* pDestinationResource,
@@ -198,8 +193,8 @@ pub fn update_subresources(
         return 0;
     }
 
-    let mut pData: *mut c_void = ptr::null_mut();
-    if let Err(_) = unsafe { p_intermediate.Map(0, None, Some(&mut pData)) } {
+    let mut p_data: *mut c_void = ptr::null_mut();
+    if unsafe { p_intermediate.Map(0, None, Some(&mut p_data)) }.is_err() {
         return 0;
     }
 
@@ -208,12 +203,12 @@ pub fn update_subresources(
             return 0;
         };
         let dest_data = D3D12_MEMCPY_DEST {
-            pData: unsafe { pData.add(p_layouts[i].Offset as usize) } as _,
+            pData: unsafe { p_data.add(p_layouts[i].Offset as usize) } as _,
             RowPitch: p_layouts[i].Footprint.RowPitch as usize,
             SlicePitch: p_layouts[i].Footprint.RowPitch as usize * p_num_rows[i] as usize,
         };
         unsafe {
-            MemcpySubresource(
+            memcpy_subresource(
                 &dest_data,
                 &p_src_data[i],
                 p_row_sizes_in_bytes[i] as usize,
@@ -247,13 +242,13 @@ pub fn update_subresources(
             unsafe { p_cmd_list.CopyTextureRegion(&dst, 0, 0, 0, &src, None) };
         }
     }
-    return required_size;
+    required_size
 }
 
 // //------------------------------------------------------------------------------------------------
 // // All arrays must be populated (e.g. by calling GetCopyableFootprints)
 #[inline]
-pub fn update_subresources_with_resource_data(
+pub unsafe fn update_subresources_with_resource_data(
     command_list: &ID3D12GraphicsCommandList,
     destination_resource: &ID3D12Resource,
     intermediate_resource: &ID3D12Resource,
@@ -293,8 +288,8 @@ pub fn update_subresources_with_resource_data(
         return 0;
     }
 
-    let mut ptr_data: *mut u8 = ptr::null_mut();
-    if let Err(_) = unsafe { intermediate_resource.Map(0, None, Some(&mut ptr_data as _)) } {
+    let ptr_data: *mut u8 = ptr::null_mut();
+    if unsafe { intermediate_resource.Map(0, None, Some(&mut (ptr_data as _))) }.is_err() {
         return 0;
     }
 
@@ -472,6 +467,7 @@ pub fn update_subresources_heap(
 
 // //------------------------------------------------------------------------------------------------
 // // Heap-allocating UpdateSubresources implementation
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[inline]
 pub fn update_subresources_heap_with_resource_data(
     command_list: &ID3D12GraphicsCommandList,
@@ -522,19 +518,21 @@ pub fn update_subresources_heap_with_resource_data(
             Some(required_size.as_mut_ptr()),
         );
     };
-    let result = update_subresources_with_resource_data(
-        command_list,
-        destination_resource,
-        intermediate_resource,
-        first_subresource,
-        num_subresources,
-        unsafe { required_size.assume_init() },
-        layouts,
-        num_rows,
-        row_size_in_bytes,
-        resource_data,
-        src_data,
-    );
+    let result = unsafe {
+        update_subresources_with_resource_data(
+            command_list,
+            destination_resource,
+            intermediate_resource,
+            first_subresource,
+            num_subresources,
+            required_size.assume_init(),
+            layouts,
+            num_rows,
+            row_size_in_bytes,
+            resource_data,
+            src_data,
+        )
+    };
 
     unsafe { dealloc(ptr, layout) };
     result
@@ -552,7 +550,7 @@ pub fn update_subresources_stack<const MAX_SUBRESOURCES: usize>(
     num_subresources: u32,
     p_src_data: &[D3D12_SUBRESOURCE_DATA],
 ) -> u64 {
-    let mut RequiredSize: u64 = 0;
+    let mut required_size: u64 = 0;
     let mut layouts_backing: [MaybeUninit<D3D12_PLACED_SUBRESOURCE_FOOTPRINT>; MAX_SUBRESOURCES] =
         unsafe { MaybeUninit::uninit().assume_init() };
     let mut num_rows_backing: [MaybeUninit<u32>; MAX_SUBRESOURCES] =
@@ -585,7 +583,7 @@ pub fn update_subresources_stack<const MAX_SUBRESOURCES: usize>(
             Some(layouts_backing.as_mut_ptr() as _),
             Some(num_rows_backing.as_mut_ptr() as _),
             Some(row_sizes_in_bytes_backing.as_mut_ptr() as _),
-            Some(&mut RequiredSize),
+            Some(&mut required_size),
         );
     }
 
@@ -593,18 +591,18 @@ pub fn update_subresources_stack<const MAX_SUBRESOURCES: usize>(
     let num_rows = unsafe { mem::transmute(&num_rows_backing[0..num_subresources as usize]) };
     let row_sizes_in_bytes =
         unsafe { mem::transmute(&row_sizes_in_bytes_backing[0..num_subresources as usize]) };
-    return update_subresources(
+    update_subresources(
         p_cmd_list,
         p_destination_resource,
         p_intermediate,
         first_subresource,
         num_subresources,
-        RequiredSize,
+        required_size,
         layouts,
         num_rows,
         row_sizes_in_bytes,
         p_src_data,
-    );
+    )
 }
 
 // //------------------------------------------------------------------------------------------------
