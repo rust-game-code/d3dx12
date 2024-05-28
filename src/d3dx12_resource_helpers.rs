@@ -1,8 +1,9 @@
-use core::num;
+use core::{num, slice};
 use std::{
-    alloc::{alloc, Layout},
+    alloc::{alloc, dealloc, Layout},
+    cmp::max,
     ffi::c_void,
-    mem::{self, size_of, MaybeUninit},
+    mem::{self, align_of, size_of, MaybeUninit},
     ptr::{self, copy_nonoverlapping},
 };
 
@@ -12,7 +13,9 @@ use std::{
 // Licensed under the MIT License (MIT).
 //
 //*********************************************************
-use windows::Win32::Graphics::Direct3D12::*;
+use windows::Win32::{
+    Foundation::STATUS_LAPS_ENCRYPTION_REQUIRES_2016_DFL, Graphics::Direct3D12::*,
+};
 
 use crate::d3dx12_core::CD3DX12_TEXTURE_COPY_LOCATION;
 
@@ -33,6 +36,20 @@ use crate::d3dx12_core::CD3DX12_TEXTURE_COPY_LOCATION;
 //     ArraySlice = static_cast<U>((Subresource / MipLevels) % ArraySize);
 //     PlaneSlice = static_cast<V>(Subresource / (MipLevels * ArraySize));
 // }
+#[inline]
+pub fn d3d12_decompose_subresource<T, U, V>(
+    subresource: u32,
+    mip_levels: u32,
+    array_size: u32,
+    mip_slice: &mut T,
+    array_slice: &mut U,
+    plane_slice: &mut V,
+) {
+    mip_slice = subresource % mip_levels;
+    array_slice = (subresource / mip_levels) % array_size;
+    plane_slice = subresource / (mip_levels * array_size);
+    (mip_slice, array_slice, plane_slice)
+}
 
 //------------------------------------------------------------------------------------------------
 // Row-by-row memcpy
@@ -219,15 +236,15 @@ pub fn update_subresources(
         };
     } else {
         for i in 0..num_subresources {
-            let dst = CD3DX12_TEXTURE_COPY_LOCATION::new_with_subresource_index(
+            let dst = D3D12_TEXTURE_COPY_LOCATION::new_with_subresource_index(
                 p_destination_resource,
                 i + first_subresource,
             );
-            let src = CD3DX12_TEXTURE_COPY_LOCATION::new_with_placed_footprint(
+            let src = D3D12_TEXTURE_COPY_LOCATION::new_with_placed_footprint(
                 p_intermediate,
                 &p_layouts[i as usize],
             );
-            unsafe { p_cmd_list.CopyTextureRegion(&dst.0, 0, 0, 0, &src.0, None) };
+            unsafe { p_cmd_list.CopyTextureRegion(&dst, 0, 0, 0, &src, None) };
         }
     }
     return required_size;
@@ -235,72 +252,103 @@ pub fn update_subresources(
 
 // //------------------------------------------------------------------------------------------------
 // // All arrays must be populated (e.g. by calling GetCopyableFootprints)
-// inline UINT64 UpdateSubresources(
-//     _In_ ID3D12GraphicsCommandList* pCmdList,
-//     _In_ ID3D12Resource* pDestinationResource,
-//     _In_ ID3D12Resource* pIntermediate,
-//     _In_range_(0,D3D12_REQ_SUBRESOURCES) UINT FirstSubresource,
-//     _In_range_(0,D3D12_REQ_SUBRESOURCES-FirstSubresource) UINT NumSubresources,
-//     UINT64 RequiredSize,
-//     _In_reads_(NumSubresources) const D3D12_PLACED_SUBRESOURCE_FOOTPRINT* pLayouts,
-//     _In_reads_(NumSubresources) const UINT* pNumRows,
-//     _In_reads_(NumSubresources) const UINT64* pRowSizesInBytes,
-//     _In_ const void* pResourceData,
-//     _In_reads_(NumSubresources) const D3D12_SUBRESOURCE_INFO* pSrcData) noexcept
-// {
-//     // Minor validation
-// #if defined(_MSC_VER) || !defined(_WIN32)
-//     const auto IntermediateDesc = pIntermediate->GetDesc();
-//     const auto DestinationDesc = pDestinationResource->GetDesc();
-// #else
-//     D3D12_RESOURCE_DESC tmpDesc1, tmpDesc2;
-//     const auto& IntermediateDesc = *pIntermediate->GetDesc(&tmpDesc1);
-//     const auto& DestinationDesc = *pDestinationResource->GetDesc(&tmpDesc2);
-// #endif
-//     if (IntermediateDesc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER ||
-//         IntermediateDesc.Width < RequiredSize + pLayouts[0].Offset ||
-//         RequiredSize > SIZE_T(-1) ||
-//         (DestinationDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER &&
-//             (FirstSubresource != 0 || NumSubresources != 1)))
-//     {
-//         return 0;
-//     }
+#[inline]
+pub fn update_subresources_with_resource_data(
+    command_list: &ID3D12GraphicsCommandList,
+    destination_resource: &ID3D12Resource,
+    intermediate_resource: &ID3D12Resource,
+    first_subresource: u32,
+    num_subresources: u32,
+    required_size: u64,
+    ptr_layouts: *const D3D12_PLACED_SUBRESOURCE_FOOTPRINT,
+    ptr_num_rows: *const u32,
+    ptr_row_sizes_in_bytes: *const u64,
+    ptr_resource_data: *const c_void,
+    ptr_src_data: *const D3D12_SUBRESOURCE_INFO,
+) -> u64 {
+    let layouts = unsafe { std::slice::from_raw_parts(ptr_layouts, num_subresources as usize) };
+    let num_rows = unsafe { std::slice::from_raw_parts(ptr_num_rows, num_subresources as usize) };
+    let row_sizes_in_bytes =
+        unsafe { std::slice::from_raw_parts(ptr_row_sizes_in_bytes, num_subresources as usize) };
+    let src_data = unsafe { std::slice::from_raw_parts(ptr_src_data, num_subresources as usize) };
 
-//     BYTE* pData;
-//     HRESULT hr = pIntermediate->Map(0, nullptr, reinterpret_cast<void**>(&pData));
-//     if (FAILED(hr))
-//     {
-//         return 0;
-//     }
+    assert!(first_subresource < D3D12_REQ_SUBRESOURCES);
+    assert!(num_subresources < D3D12_REQ_SUBRESOURCES - first_subresource);
+    // Minor validation
+    // #if defined(_MSC_VER) || !defined(_WIN32)
+    let intermediate_desc = unsafe { intermediate_resource.GetDesc() };
+    let destination_desc = unsafe { destination_resource.GetDesc() };
+    // #else
+    //     D3D12_RESOURCE_DESC tmpDesc1, tmpDesc2;
+    //     const auto& IntermediateDesc = *pIntermediate->GetDesc(&tmpDesc1);
+    //     const auto& DestinationDesc = *pDestinationResource->GetDesc(&tmpDesc2);
+    // #endif
 
-//     for (UINT i = 0; i < NumSubresources; ++i)
-//     {
-//         if (pRowSizesInBytes[i] > SIZE_T(-1)) return 0;
-//         D3D12_MEMCPY_DEST DestData = { pData + pLayouts[i].Offset, pLayouts[i].Footprint.RowPitch, SIZE_T(pLayouts[i].Footprint.RowPitch) * SIZE_T(pNumRows[i]) };
-//         MemcpySubresource(&DestData, pResourceData, &pSrcData[i], static_cast<SIZE_T>(pRowSizesInBytes[i]), pNumRows[i], pLayouts[i].Footprint.Depth);
-//     }
-//     pIntermediate->Unmap(0, nullptr);
+    if intermediate_desc.Dimension != D3D12_RESOURCE_DIMENSION_BUFFER
+        || intermediate_desc.Width < required_size + layouts[0].Offset
+        || required_size > usize::MAX as u64
+        || (destination_desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER
+            && (first_subresource != 0 || num_subresources != 1))
+    {
+        return 0;
+    }
 
-//     if (DestinationDesc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER)
-//     {
-//         pCmdList->CopyBufferRegion(
-//             pDestinationResource, 0, pIntermediate, pLayouts[0].Offset, pLayouts[0].Footprint.Width);
-//     }
-//     else
-//     {
-//         for (UINT i = 0; i < NumSubresources; ++i)
-//         {
-//             const CD3DX12_TEXTURE_COPY_LOCATION Dst(pDestinationResource, i + FirstSubresource);
-//             const CD3DX12_TEXTURE_COPY_LOCATION Src(pIntermediate, pLayouts[i]);
-//             pCmdList->CopyTextureRegion(&Dst, 0, 0, 0, &Src, nullptr);
-//         }
-//     }
-//     return RequiredSize;
-// }
+    let mut ptr_data: *mut u8 = ptr::null_mut();
+    if let Err(_) = unsafe { intermediate_resource.Map(0, None, Some(&mut ptr_data as _)) } {
+        return 0;
+    }
 
-// //------------------------------------------------------------------------------------------------
-// // Heap-allocating UpdateSubresources implementation
+    for i in 0..num_subresources as usize {
+        if row_sizes_in_bytes[i] > usize::MAX as u64 {
+            return 0;
+        }
+        let dest_data = D3D12_MEMCPY_DEST {
+            pData: unsafe { ptr_data.add(layouts[i].Offset as usize) } as _,
+            RowPitch: layouts[i].Footprint.RowPitch as usize,
+            SlicePitch: layouts[i].Footprint.RowPitch as usize * num_rows[i] as usize,
+        };
+        unsafe {
+            memcpy_subresource_with_resource_data(
+                &dest_data,
+                ptr_resource_data,
+                &src_data[i],
+                row_sizes_in_bytes[i] as usize,
+                num_rows[i],
+                layouts[i].Footprint.Depth,
+            )
+        }
+    }
+    unsafe { intermediate_resource.Unmap(0, None) };
+
+    if destination_desc.Dimension == D3D12_RESOURCE_DIMENSION_BUFFER {
+        unsafe {
+            command_list.CopyBufferRegion(
+                destination_resource,
+                0,
+                intermediate_resource,
+                layouts[0].Offset,
+                layouts[0].Footprint.Width as u64,
+            )
+        };
+    } else {
+        for i in 0..num_subresources {
+            let dst = D3D12_TEXTURE_COPY_LOCATION::new_with_subresource_index(
+                destination_resource,
+                i + first_subresource,
+            );
+            let src = D3D12_TEXTURE_COPY_LOCATION::new_with_placed_footprint(
+                intermediate_resource,
+                &layouts[i as usize],
+            );
+            unsafe { command_list.CopyTextureRegion(&dst, 0, 0, 0, &src, None) };
+        }
+    }
+    required_size
+}
+
+//------------------------------------------------------------------------------------------------
 // Heap-allocating UpdateSubresources implementation
+#[inline]
 pub fn update_subresources_heap(
     cmd_list: &ID3D12GraphicsCommandList,
     destination_resource: &ID3D12Resource,
@@ -310,10 +358,21 @@ pub fn update_subresources_heap(
     num_subresources: u32,
     src_data: &[D3D12_SUBRESOURCE_DATA],
 ) -> u64 {
-    let mut layouts =
-        Vec::<D3D12_PLACED_SUBRESOURCE_FOOTPRINT>::with_capacity(num_subresources as usize);
-    let mut num_rows = Vec::<u32>::with_capacity(num_subresources as usize);
-    let mut row_size_in_bytes = Vec::<u64>::with_capacity(num_subresources as usize);
+    let layout = {
+        let size = num_subresources as usize
+            * (size_of::<D3D12_PLACED_SUBRESOURCE_FOOTPRINT>()
+                + size_of::<u32>()
+                + size_of::<u64>());
+        let align = max(
+            align_of::<D3D12_PLACED_SUBRESOURCE_FOOTPRINT>(),
+            align_of::<u64>(),
+        );
+        Layout::from_size_align(size, align).unwrap()
+    };
+    let ptr = unsafe { alloc(layout) };
+    let layouts: *mut D3D12_PLACED_SUBRESOURCE_FOOTPRINT = ptr.cast();
+    let row_size_in_bytes: *mut u64 = unsafe { layouts.add(num_subresources as usize) }.cast();
+    let num_rows: *mut u32 = unsafe { row_size_in_bytes.add(num_subresources as usize) }.cast();
 
     let desc = unsafe { destination_resource.GetDesc() };
 
@@ -331,27 +390,29 @@ pub fn update_subresources_heap(
             first_subresource,
             num_subresources,
             intermediate_offset,
-            Some(layouts.as_mut_ptr()),
-            Some(num_rows.as_mut_ptr()),
-            Some(row_size_in_bytes.as_mut_ptr()),
+            Some(layouts),
+            Some(num_rows),
+            Some(row_size_in_bytes),
             Some(required_size.as_mut_ptr()),
         );
-        layouts.set_len(num_subresources as usize);
-        num_rows.set_len(num_subresources as usize);
-        row_size_in_bytes.set_len(num_subresources as usize);
+        // layouts.set_len(num_subresources as usize);
+        // num_rows.set_len(num_subresources as usize);
+        // row_size_in_bytes.set_len(num_subresources as usize);
     };
-    update_subresources(
+    let result = update_subresources(
         cmd_list,
         destination_resource,
         intermediate_resource,
         first_subresource,
         num_subresources,
         unsafe { required_size.assume_init() },
-        &layouts,
-        &num_rows,
-        &row_size_in_bytes,
+        unsafe { slice::from_raw_parts(layouts, num_subresources as usize) },
+        unsafe { slice::from_raw_parts(num_rows, num_subresources as usize) },
+        unsafe { slice::from_raw_parts(row_size_in_bytes, num_subresources as usize) },
         src_data,
-    )
+    );
+    unsafe { dealloc(ptr, layout) };
+    result
 }
 // #[inline]
 // pub fn update_subresources_heap(
@@ -411,47 +472,73 @@ pub fn update_subresources_heap(
 
 // //------------------------------------------------------------------------------------------------
 // // Heap-allocating UpdateSubresources implementation
-// inline UINT64 UpdateSubresources(
-//     _In_ ID3D12GraphicsCommandList* pCmdList,
-//     _In_ ID3D12Resource* pDestinationResource,
-//     _In_ ID3D12Resource* pIntermediate,
-//     UINT64 IntermediateOffset,
-//     _In_range_(0,D3D12_REQ_SUBRESOURCES) UINT FirstSubresource,
-//     _In_range_(0,D3D12_REQ_SUBRESOURCES-FirstSubresource) UINT NumSubresources,
-//     _In_ const void* pResourceData,
-//     _In_reads_(NumSubresources) const D3D12_SUBRESOURCE_INFO* pSrcData) noexcept
-// {
-//     UINT64 RequiredSize = 0;
-//     const auto MemToAlloc = static_cast<UINT64>(sizeof(D3D12_PLACED_SUBRESOURCE_FOOTPRINT) + sizeof(UINT) + sizeof(UINT64)) * NumSubresources;
-//     if (MemToAlloc > SIZE_MAX)
-//     {
-//         return 0;
-//     }
-//     void* pMem = HeapAlloc(GetProcessHeap(), 0, static_cast<SIZE_T>(MemToAlloc));
-//     if (pMem == nullptr)
-//     {
-//         return 0;
-//     }
-//     auto pLayouts = static_cast<D3D12_PLACED_SUBRESOURCE_FOOTPRINT*>(pMem);
-//     auto pRowSizesInBytes = reinterpret_cast<UINT64*>(pLayouts + NumSubresources);
-//     auto pNumRows = reinterpret_cast<UINT*>(pRowSizesInBytes + NumSubresources);
+#[inline]
+pub fn update_subresources_heap_with_resource_data(
+    command_list: &ID3D12GraphicsCommandList,
+    destination_resource: &ID3D12Resource,
+    intermediate_resource: &ID3D12Resource,
+    intermediate_offset: u64,
+    first_subresource: u32,
+    num_subresources: u32,
+    resource_data: *const c_void,
+    src_data: *const D3D12_SUBRESOURCE_INFO,
+) -> u64 {
+    let mut required_size = MaybeUninit::<u64>::uninit();
 
-// #if defined(_MSC_VER) || !defined(_WIN32)
-//     const auto Desc = pDestinationResource->GetDesc();
-// #else
-//     D3D12_RESOURCE_DESC tmpDesc;
-//     const auto& Desc = *pDestinationResource->GetDesc(&tmpDesc);
-// #endif
-//     ID3D12Device* pDevice = nullptr;
-//     pDestinationResource->GetDevice(IID_ID3D12Device, reinterpret_cast<void**>(&pDevice));
-//     pDevice->GetCopyableFootprints(&Desc, FirstSubresource, NumSubresources, IntermediateOffset, pLayouts, pNumRows, pRowSizesInBytes, &RequiredSize);
-//     pDevice->Release();
+    let layout = {
+        let size = num_subresources as usize
+            * (size_of::<D3D12_PLACED_SUBRESOURCE_FOOTPRINT>()
+                + size_of::<u32>()
+                + size_of::<u64>());
+        let align = max(
+            align_of::<D3D12_PLACED_SUBRESOURCE_FOOTPRINT>(),
+            align_of::<u64>(),
+        );
+        Layout::from_size_align(size, align).unwrap()
+    };
+    let ptr = unsafe { alloc(layout) };
 
-//     const UINT64 Result = UpdateSubresources(pCmdList, pDestinationResource, pIntermediate, FirstSubresource, NumSubresources, RequiredSize, pLayouts, pNumRows, pRowSizesInBytes, pResourceData, pSrcData);
-//     HeapFree(GetProcessHeap(), 0, pMem);
-//     return Result;
-// }
+    let layouts: *mut D3D12_PLACED_SUBRESOURCE_FOOTPRINT = ptr.cast();
+    let row_size_in_bytes: *mut u64 = unsafe { layouts.add(num_subresources as usize) }.cast();
+    let num_rows: *mut u32 = unsafe { row_size_in_bytes.add(num_subresources as usize) }.cast();
 
+    unsafe {
+        let device = {
+            let mut result__: Option<ID3D12Device> = None;
+            let Ok(()) = destination_resource.GetDevice(&mut result__) else {
+                return 0;
+            };
+            result__.expect("ID3D12Device is null")
+        };
+        let desc = destination_resource.GetDesc();
+        device.GetCopyableFootprints(
+            &desc,
+            first_subresource,
+            num_subresources,
+            intermediate_offset,
+            Some(layouts),
+            Some(num_rows),
+            Some(row_size_in_bytes),
+            Some(required_size.as_mut_ptr()),
+        );
+    };
+    let result = update_subresources_with_resource_data(
+        command_list,
+        destination_resource,
+        intermediate_resource,
+        first_subresource,
+        num_subresources,
+        unsafe { required_size.assume_init() },
+        layouts,
+        num_rows,
+        row_size_in_bytes,
+        resource_data,
+        src_data,
+    );
+
+    unsafe { dealloc(ptr, layout) };
+    result
+}
 //------------------------------------------------------------------------------------------------
 // Stack-allocating UpdateSubresources implementation
 // template <UINT MaxSubresources>
