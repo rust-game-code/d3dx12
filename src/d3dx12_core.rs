@@ -6,7 +6,9 @@
 //*********************************************************
 
 use std::{
+    cmp::max,
     ffi::c_void,
+    mem::MaybeUninit,
     ptr::{addr_of_mut, copy_nonoverlapping},
 };
 
@@ -595,7 +597,7 @@ pub trait CD3DX12_RASTERIZER_DESC1 {
             FillMode: D3D12_FILL_MODE_SOLID,
             CullMode: D3D12_CULL_MODE_BACK,
             FrontCounterClockwise: FALSE,
-            DepthBias: D3D12_DEFAULT_DEPTH_BIAS,
+            DepthBias: D3D12_DEFAULT_DEPTH_BIAS as f32,
             DepthBiasClamp: D3D12_DEFAULT_DEPTH_BIAS_CLAMP,
             SlopeScaledDepthBias: D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS,
             DepthClipEnable: TRUE,
@@ -605,16 +607,16 @@ pub trait CD3DX12_RASTERIZER_DESC1 {
             ConservativeRaster: D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF,
         }
     }
-    pub fn new(
+    fn new(
         fill_mode: D3D12_FILL_MODE,
         cull_mode: D3D12_CULL_MODE,
-        front_counter_clockwise: bool,
+        front_counter_clockwise: BOOL,
         depth_bias: f32,
         depth_bias_clamp: f32,
         slope_scaled_depth_bias: f32,
-        depth_clip_enable: bool,
-        multisample_enable: bool,
-        antialiased_line_enable: bool,
+        depth_clip_enable: BOOL,
+        multisample_enable: BOOL,
+        antialiased_line_enable: BOOL,
         forced_sample_count: u32,
         conservative_raster: D3D12_CONSERVATIVE_RASTERIZATION_MODE,
     ) -> D3D12_RASTERIZER_DESC1 {
@@ -657,9 +659,9 @@ impl CD3DX12_RASTERIZER_DESC1 for D3D12_RASTERIZER_DESC1 {
 // #if defined(D3D12_SDK_VERSION) && (D3D12_SDK_VERSION >= 610)
 pub trait CD3DX12_RASTERIZER_DESC2 {
     fn from_D3D12_RASTERIZER_DESC1(o: &D3D12_RASTERIZER_DESC1) -> D3D12_RASTERIZER_DESC2 {
-        let line_rasterization_mode = if o.MultisampleEnable {
+        let line_rasterization_mode = if o.MultisampleEnable.as_bool() {
             D3D12_LINE_RASTERIZATION_MODE_QUADRILATERAL_WIDE
-        } else if o.AntialiasedLineEnable {
+        } else if o.AntialiasedLineEnable.as_bool() {
             D3D12_LINE_RASTERIZATION_MODE_ALPHA_ANTIALIASED
         } else {
             D3D12_LINE_RASTERIZATION_MODE_ALIASED
@@ -678,14 +680,16 @@ pub trait CD3DX12_RASTERIZER_DESC2 {
         }
     }
     fn from_D3D12_RASTERIZER_DESC(o: &D3D12_RASTERIZER_DESC) -> D3D12_RASTERIZER_DESC2 {
-        Self::from_D3D12_RASTERIZER_DESC1(&D3D12_RASTERIZER_DESC1::from_D3D12_RASTERIZER_DESC(o))
+        D3D12_RASTERIZER_DESC2::from_D3D12_RASTERIZER_DESC1(
+            &D3D12_RASTERIZER_DESC1::from_D3D12_RASTERIZER_DESC(o),
+        )
     }
     fn default() -> D3D12_RASTERIZER_DESC2 {
         D3D12_RASTERIZER_DESC2 {
             FillMode: D3D12_FILL_MODE_SOLID,
             CullMode: D3D12_CULL_MODE_BACK,
             FrontCounterClockwise: FALSE,
-            DepthBias: D3D12_DEFAULT_DEPTH_BIAS,
+            DepthBias: D3D12_DEFAULT_DEPTH_BIAS as f32,
             DepthBiasClamp: D3D12_DEFAULT_DEPTH_BIAS_CLAMP,
             SlopeScaledDepthBias: D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS,
             DepthClipEnable: TRUE,
@@ -719,6 +723,14 @@ pub trait CD3DX12_RASTERIZER_DESC2 {
             ConservativeRaster: conservative_raster,
         }
     }
+    fn to_D3D12_RASTERIZER_DESC1(&self) -> D3D12_RASTERIZER_DESC1;
+
+    //     operator D3D12_RASTERIZER_DESC() const noexcept
+    //     {
+    //         return (D3D12_RASTERIZER_DESC)CD3DX12_RASTERIZER_DESC1((D3D12_RASTERIZER_DESC1)*this);
+    //     }
+}
+impl CD3DX12_RASTERIZER_DESC2 for D3D12_RASTERIZER_DESC2 {
     fn to_D3D12_RASTERIZER_DESC1(&self) -> D3D12_RASTERIZER_DESC1 {
         let (antialiased_line_enable, multisample_enable) =
             if self.LineRasterizationMode == D3D12_LINE_RASTERIZATION_MODE_ALPHA_ANTIALIASED {
@@ -742,13 +754,7 @@ pub trait CD3DX12_RASTERIZER_DESC2 {
             ConservativeRaster: self.ConservativeRaster,
         }
     }
-
-    //     operator D3D12_RASTERIZER_DESC() const noexcept
-    //     {
-    //         return (D3D12_RASTERIZER_DESC)CD3DX12_RASTERIZER_DESC1((D3D12_RASTERIZER_DESC1)*this);
-    //     }
 }
-impl CD3DX12_RASTERIZER_DESC2 for D3D12_RASTERIZER_DESC2 {}
 // #endif // D3D12_SDK_VERSION >= 610
 
 //------------------------------------------------------------------------------------------------
@@ -842,7 +848,7 @@ pub trait CD3DX12_HEAP_DESC {
         let flags = flags.unwrap_or(D3D12_HEAP_FLAG_NONE);
         D3D12_HEAP_DESC {
             SizeInBytes: size,
-            Properties: CD3DX12_HEAP_PROPERTIES::new_with_type(r#type, None, None),
+            Properties: D3D12_HEAP_PROPERTIES::new_with_type(r#type, None, None),
             Alignment: alignment,
             Flags: flags,
         }
@@ -858,7 +864,7 @@ pub trait CD3DX12_HEAP_DESC {
         let flags = flags.unwrap_or(D3D12_HEAP_FLAG_NONE);
         D3D12_HEAP_DESC {
             SizeInBytes: size,
-            Properties: CD3DX12_HEAP_PROPERTIES::new_custom(
+            Properties: D3D12_HEAP_PROPERTIES::new_custom(
                 cpu_page_property,
                 memory_pool_preference,
                 None,
@@ -889,7 +895,7 @@ pub trait CD3DX12_HEAP_DESC {
         let flags = flags.unwrap_or(D3D12_HEAP_FLAG_NONE);
         D3D12_HEAP_DESC {
             SizeInBytes: res_alloc_info.SizeInBytes,
-            Properties: CD3DX12_HEAP_PROPERTIES::new_with_type(r#type, None, None),
+            Properties: D3D12_HEAP_PROPERTIES::new_with_type(r#type, None, None),
             Alignment: res_alloc_info.Alignment,
             Flags: flags,
         }
@@ -903,7 +909,7 @@ pub trait CD3DX12_HEAP_DESC {
         let flags = flags.unwrap_or(D3D12_HEAP_FLAG_NONE);
         D3D12_HEAP_DESC {
             SizeInBytes: res_alloc_info.SizeInBytes,
-            Properties: CD3DX12_HEAP_PROPERTIES::new_custom(
+            Properties: D3D12_HEAP_PROPERTIES::new_custom(
                 cpu_page_property,
                 memory_pool_preference,
                 None,
@@ -949,20 +955,21 @@ pub trait CD3DX12_CLEAR_VALUE {
     }
 }
 impl CD3DX12_CLEAR_VALUE for D3D12_CLEAR_VALUE {}
-impl PartialEq for CD3DX12_CLEAR_VALUE {
+pub struct D3DX12_CLEAR_VALUE_TYPE(pub D3D12_CLEAR_VALUE);
+impl PartialEq for D3DX12_CLEAR_VALUE_TYPE {
     fn eq(&self, other: &Self) -> bool {
-        if self.Format != other.Format {
+        if self.0.Format != other.0.Format {
             return false;
         }
-        if self.Format == DXGI_FORMAT_D24_UNORM_S8_UINT
-            || self.Format == DXGI_FORMAT_D16_UNORM
-            || self.Format == DXGI_FORMAT_D32_FLOAT
-            || self.Format == DXGI_FORMAT_D32_FLOAT_S8X24_UINT
+        if self.0.Format == DXGI_FORMAT_D24_UNORM_S8_UINT
+            || self.0.Format == DXGI_FORMAT_D16_UNORM
+            || self.0.Format == DXGI_FORMAT_D32_FLOAT
+            || self.0.Format == DXGI_FORMAT_D32_FLOAT_S8X24_UINT
         {
-            return self.Anonymous.DepthStencil.Depth == other.Anonymous.DepthStencil.Depth
-                && self.Anonymous.DepthStencil.Stencil == other.Anonymous.DepthStencil.Stencil;
+            return self.0.Anonymous.DepthStencil.Depth == other.0.Anonymous.DepthStencil.Depth
+                && self.0.Anonymous.DepthStencil.Stencil == other.0.Anonymous.DepthStencil.Stencil;
         } else {
-            return self.Anonymous.Color == other.Anonymous.Color;
+            return self.0.Anonymous.Color == other.0.Anonymous.Color;
         }
     }
 }
@@ -1167,7 +1174,7 @@ pub trait CD3DX12_SUBRESOURCE_FOOTPRINT {
             Width: res_desc.Width as u32,
             Height: res_desc.Height,
             Depth: if res_desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D {
-                res_desc.DepthOrArraySize
+                res_desc.DepthOrArraySize as u32
             } else {
                 1
             },
@@ -1179,34 +1186,37 @@ impl CD3DX12_SUBRESOURCE_FOOTPRINT for D3D12_SUBRESOURCE_FOOTPRINT {}
 
 //------------------------------------------------------------------------------------------------
 pub trait CD3DX12_TEXTURE_COPY_LOCATION {
-    fn new(resource: &ID3D12Resource) -> Self {
-        Self(D3D12_TEXTURE_COPY_LOCATION {
+    fn new(resource: &ID3D12Resource) -> D3D12_TEXTURE_COPY_LOCATION {
+        D3D12_TEXTURE_COPY_LOCATION {
             pResource: unsafe { std::mem::transmute_copy(resource) },
             Type: D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
             Anonymous: D3D12_TEXTURE_COPY_LOCATION_0::default(),
-        })
+        }
     }
     fn new_with_placed_footprint(
         resource: &ID3D12Resource,
         footprint: &D3D12_PLACED_SUBRESOURCE_FOOTPRINT,
-    ) -> Self {
-        Self(D3D12_TEXTURE_COPY_LOCATION {
+    ) -> D3D12_TEXTURE_COPY_LOCATION {
+        D3D12_TEXTURE_COPY_LOCATION {
             pResource: unsafe { std::mem::transmute_copy(resource) },
             Type: D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
             Anonymous: D3D12_TEXTURE_COPY_LOCATION_0 {
                 PlacedFootprint: *footprint,
             },
-        })
+        }
     }
 
-    fn new_with_subresource_index(resource: &ID3D12Resource, subresource_index: u32) -> Self {
-        Self(D3D12_TEXTURE_COPY_LOCATION {
+    fn new_with_subresource_index(
+        resource: &ID3D12Resource,
+        subresource_index: u32,
+    ) -> D3D12_TEXTURE_COPY_LOCATION {
+        D3D12_TEXTURE_COPY_LOCATION {
             pResource: unsafe { std::mem::transmute_copy(resource) },
             Type: D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
             Anonymous: D3D12_TEXTURE_COPY_LOCATION_0 {
                 SubresourceIndex: subresource_index,
             },
-        })
+        }
     }
 }
 impl CD3DX12_TEXTURE_COPY_LOCATION for D3D12_TEXTURE_COPY_LOCATION {}
@@ -1387,7 +1397,7 @@ pub trait CD3DX12_RESOURCE_DESC {
             flags,
         )
     }
-    fn tex_3h(
+    fn tex_3d(
         format: DXGI_FORMAT,
         width: u64,
         height: u32,
@@ -1415,10 +1425,17 @@ pub trait CD3DX12_RESOURCE_DESC {
             flags,
         )
     }
+    fn depth(&self) -> u16;
+    fn array_size(&self) -> u16;
+    fn plane_count(&self, device: &ID3D12Device) -> u8;
+    fn subresources(&self, device: &ID3D12Device) -> u32;
+    fn calc_subresource(&self, mip_slice: u32, array_slice: u32, plane_slice: u32) -> u32;
+}
+impl CD3DX12_RESOURCE_DESC for D3D12_RESOURCE_DESC {
     #[inline]
     fn depth(&self) -> u16 {
         if self.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D {
-            self.DepthOrArraySize
+            self.DepthOrArraySize as u16
         } else {
             1
         }
@@ -1445,12 +1462,11 @@ pub trait CD3DX12_RESOURCE_DESC {
             mip_slice,
             array_slice,
             plane_slice,
-            self.MipLevels,
-            self.array_size(),
+            self.MipLevels as u32,
+            self.array_size() as u32,
         )
     }
 }
-impl CD3DX12_RESOURCE_DESC for D3D12_RESOURCE_DESC {}
 
 //------------------------------------------------------------------------------------------------
 pub trait CD3DX12_RESOURCE_DESC1 {
@@ -1660,6 +1676,13 @@ pub trait CD3DX12_RESOURCE_DESC1 {
             Some(0),
         )
     }
+    fn depth(&self) -> u16;
+    fn array_size(&self) -> u16;
+    fn plane_count(&self, device: &ID3D12Device) -> u8;
+    fn subresources(&self, device: &ID3D12Device) -> u32;
+    fn calc_subresource(&self, mip_slice: u32, array_slice: u32, plane_slice: u32) -> u32;
+}
+impl CD3DX12_RESOURCE_DESC1 for D3D12_RESOURCE_DESC1 {
     #[inline]
     fn depth(&self) -> u16 {
         if self.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D {
@@ -1690,22 +1713,21 @@ pub trait CD3DX12_RESOURCE_DESC1 {
             mip_slice,
             array_slice,
             plane_slice,
-            self.MipLevels,
-            self.array_size(),
+            self.MipLevels as u32,
+            self.array_size() as u32,
         )
     }
 }
-impl CD3DX12_RESOURCE_DESC1 for D3D12_RESOURCE_DESC1 {}
 
 //------------------------------------------------------------------------------------------------
 // Fills in the mipmap and alignment values of pDesc when either members are zero
 // Used to replace an implicit field to an explicit (0 mip map = max mip map level)
 // If expansion has occured, returns LclDesc, else returns the original pDesc
 #[inline]
-pub fn D3DX12ConditionallyExpandAPIDesc(
-    lcl_desc: &mut D3D12_RESOURCE_DESC1,
-    p_desc: &D3D12_RESOURCE_DESC1,
-) -> &D3D12_RESOURCE_DESC1 {
+pub fn D3DX12ConditionallyExpandAPIDesc<'a>(
+    lcl_desc: &'a mut D3D12_RESOURCE_DESC1,
+    p_desc: &'a D3D12_RESOURCE_DESC1,
+) -> &'a D3D12_RESOURCE_DESC1 {
     // Expand mip levels:
     if p_desc.MipLevels == 0 || p_desc.Alignment == 0 {
         *lcl_desc = *p_desc;
@@ -1719,33 +1741,33 @@ pub fn D3DX12ConditionallyExpandAPIDesc(
                 }
                 ui_ret
             };
-            let max = |a: u64, b: u64| -> u64 {
-                if a < b {
-                    b
-                } else {
-                    a
-                }
-            };
+            // let max = |a: u64, b: u64| -> u64 {
+            //     if a < b {
+            //         b
+            //     } else {
+            //         a
+            //     }
+            // };
 
             lcl_desc.MipLevels = max_mip_levels(max(
                 if lcl_desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D {
-                    lcl_desc.DepthOrArraySize
+                    lcl_desc.DepthOrArraySize as u64
                 } else {
                     1
                 },
-                max(lcl_desc.Width, lcl_desc.Height),
+                max(lcl_desc.Width, lcl_desc.Height as u64),
             ));
         }
         if p_desc.Alignment == 0 {
             if p_desc.Layout == D3D12_TEXTURE_LAYOUT_64KB_UNDEFINED_SWIZZLE
                 || p_desc.Layout == D3D12_TEXTURE_LAYOUT_64KB_STANDARD_SWIZZLE
             {
-                lcl_desc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+                lcl_desc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT as u64;
             } else {
                 lcl_desc.Alignment = if p_desc.SampleDesc.Count > 1 {
-                    D3D12_DEFAULT_MSAA_RESOURCE_PLACEMENT_ALIGNMENT
+                    D3D12_DEFAULT_MSAA_RESOURCE_PLACEMENT_ALIGNMENT as u64
                 } else {
-                    D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT
+                    D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT as u64
                 };
             }
         }
@@ -1780,18 +1802,19 @@ impl CD3DX12_VIEW_INSTANCING_DESC for D3D12_VIEW_INSTANCING_DESC {}
 //------------------------------------------------------------------------------------------------
 pub trait CD3DX12_RT_FORMAT_ARRAY {
     fn new(formats: &[DXGI_FORMAT]) -> D3D12_RT_FORMAT_ARRAY {
-        debug_assert!(formats.len() <= D3D12_RT_FORMAT_ARRAY::RTFormats.len());
-        let mut maybe: MaybeUnitilized<D3D12_RT_FORMAT_ARRAY> = MaybeUnitilized::uninit();
+        // FIXME: Use const generics if possible
+        debug_assert!(formats.len() <= 8 /* D3D12_RT_FORMAT_ARRAY::RTFormats.len() */);
+        let mut maybe: MaybeUninit<D3D12_RT_FORMAT_ARRAY> = MaybeUninit::uninit();
         // assumes ARRAY_SIZE(pFormats) == ARRAY_SIZE(RTFormats)
         unsafe {
             let ptr = maybe.as_mut_ptr();
             copy_nonoverlapping(
                 formats.as_ptr(),
-                addr_of_mut!((*ptr).RTFromats),
+                addr_of_mut!((*ptr).RTFormats).cast(),
                 formats.len(),
             );
             addr_of_mut!((*ptr).NumRenderTargets).write(formats.len() as u32);
         }
-        maybe.assume_init()
+        unsafe { maybe.assume_init() }
     }
 }
