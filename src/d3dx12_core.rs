@@ -1726,24 +1726,26 @@ impl CD3DX12_RESOURCE_DESC1 for D3D12_RESOURCE_DESC1 {
 // Fills in the mipmap and alignment values of pDesc when either members are zero
 // Used to replace an implicit field to an explicit (0 mip map = max mip map level)
 // If expansion has occured, returns LclDesc, else returns the original pDesc
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[inline]
-pub fn D3DX12ConditionallyExpandAPIDesc<'a>(
-    lcl_desc: &'a mut D3D12_RESOURCE_DESC1,
-    p_desc: &'a D3D12_RESOURCE_DESC1,
-) -> &'a D3D12_RESOURCE_DESC1 {
+pub fn D3DX12ConditionallyExpandAPIDesc(
+    lcl_desc: *mut D3D12_RESOURCE_DESC1,
+    p_desc: &D3D12_RESOURCE_DESC1,
+) -> &D3D12_RESOURCE_DESC1 {
     // Expand mip levels:
     if p_desc.MipLevels == 0 || p_desc.Alignment == 0 {
-        *lcl_desc = *p_desc;
+        unsafe { lcl_desc.write(*p_desc) };
+        let lcl_desc = unsafe { &mut *lcl_desc };
         if p_desc.MipLevels == 0 {
-            let max_mip_levels = |ui_max_dimension: u64| -> u16 {
-                let mut ui_ret = 0;
-                let mut ui_max_dimension = ui_max_dimension;
-                while ui_max_dimension > 0 {
-                    ui_ret += 1;
-                    ui_max_dimension >>= 1;
-                }
-                ui_ret
-            };
+            // let max_mip_levels = |ui_max_dimension: u64| -> u16 {
+            //     let mut ui_ret = 0;
+            //     let mut ui_max_dimension = ui_max_dimension;
+            //     while ui_max_dimension > 0 {
+            //         ui_ret += 1;
+            //         ui_max_dimension >>= 1;
+            //     }
+            //     ui_ret
+            // };
             // let max = |a: u64, b: u64| -> u64 {
             //     if a < b {
             //         b
@@ -1752,14 +1754,22 @@ pub fn D3DX12ConditionallyExpandAPIDesc<'a>(
             //     }
             // };
 
-            lcl_desc.MipLevels = max_mip_levels(max(
-                if lcl_desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D {
-                    lcl_desc.DepthOrArraySize as u64
-                } else {
-                    1
-                },
-                max(lcl_desc.Width, lcl_desc.Height as u64),
-            ));
+            lcl_desc.MipLevels = {
+                let mut ui_max_dimension = max(
+                    if lcl_desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE3D {
+                        lcl_desc.DepthOrArraySize as u64
+                    } else {
+                        1
+                    },
+                    max(lcl_desc.Width, lcl_desc.Height as u64),
+                );
+                let mut ui_ret = 0;
+                while ui_max_dimension > 0 {
+                    ui_ret += 1;
+                    ui_max_dimension >>= 1;
+                }
+                ui_ret
+            };
         }
         if p_desc.Alignment == 0 {
             if p_desc.Layout == D3D12_TEXTURE_LAYOUT_64KB_UNDEFINED_SWIZZLE
@@ -1819,5 +1829,52 @@ pub trait CD3DX12_RT_FORMAT_ARRAY {
             addr_of_mut!((*ptr).NumRenderTargets).write(formats.len() as u32);
         }
         unsafe { maybe.assume_init() }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::ptr::NonNull;
+
+    use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_R8G8B8A8_UNORM;
+
+    use super::*;
+
+    #[test]
+    fn test_d3dx12_conditionally_expand_api_desc() {
+        let mut lcl_desc = D3D12_RESOURCE_DESC1::tex_2d(
+            DXGI_FORMAT_R8G8B8A8_UNORM,
+            1024,
+            1024,
+            None,
+            Some(4),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+        let p_desc = D3D12_RESOURCE_DESC1::default();
+        let result = D3DX12ConditionallyExpandAPIDesc(&mut lcl_desc, &p_desc);
+        assert_eq!(result, &p_desc);
+    }
+
+    #[test]
+    fn test_d3dx12_view_instancing_desc() {
+        let view_instance_locations = NonNull::dangling().as_ptr();
+        let desc = D3D12_VIEW_INSTANCING_DESC::new(
+            1,
+            view_instance_locations,
+            D3D12_VIEW_INSTANCING_FLAG_ENABLE_VIEW_INSTANCE_MASKING,
+        );
+        assert_eq!(desc.ViewInstanceCount, 1);
+        assert_eq!(desc.pViewInstanceLocations, view_instance_locations);
+        assert_eq!(
+            desc.Flags,
+            D3D12_VIEW_INSTANCING_FLAG_ENABLE_VIEW_INSTANCE_MASKING
+        );
     }
 }

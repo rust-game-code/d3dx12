@@ -12,3 +12,8 @@ mod d3dx12_resource_helpers;
 pub mod resource_helpers {
     pub use crate::d3dx12_resource_helpers::*;
 }
+
+mod d3dx12_property_format_table;
+pub mod property_format_table {
+    pub use crate::d3dx12_property_format_table::*;
+}
